@@ -183,7 +183,7 @@ Docs: [Common Functions](https://www.mql5.com/en/docs/common)
 | Log | `Print` / `PrintFormat` |
 | Chart text | `Comment` (top-left; easy to overwrite) |
 | Stop EA | `ExpertRemove` |
-| Yield | `Sleep` (EA/script; not in indicators’ calc path) |
+| Yield | `Sleep` (EA/script only — **forbidden in indicators**, UI thread) |
 | Timing | `GetTickCount(64)`, `GetMicrosecondCount` |
 | Errors | `ResetLastError`, `SetUserError` |
 | Tester $ | `TesterDeposit` / `Withdrawal` / `Stop` / `Statistics` |
