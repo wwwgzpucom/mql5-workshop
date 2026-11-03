@@ -18,8 +18,9 @@ Skill file: `.claude/skills/mql5-workshop/SKILL.md`
 ## What agents get
 
 - Complete atlas of official doc categories with URLs
-- Critical rules for trading (order/deal/position, filling, retcodes)
-- Events, timeseries, indicators, charts/objects, files, network
+- Trading deep dive: `MqlTradeRequest`, filling×execution matrix, OnTradeTransaction types
+- OnCalculate dual forms, chart-event param tables, Economic Calendar (×1e6 values)
+- Files sandbox, runtime program rules, timeseries/CopyBuffer notes
 - Standard Library map (`Trade`, `Controls`, …)
 - Panel EA patterns + compilation (F7)
 - Mandate: official docs are source of truth

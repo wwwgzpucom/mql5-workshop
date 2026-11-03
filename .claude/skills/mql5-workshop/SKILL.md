@@ -23,7 +23,10 @@ description: "Full MQL5 Reference curriculum aligned to https://www.mql5.com/en/
 | 5 | [Market / Account / Terminal](#5-market--account--terminal) | [/en/docs/marketinfo](https://www.mql5.com/en/docs/marketinfo) |
 | 6 | [Timeseries & Indicators Access](#6-timeseries--indicators-access) | [/en/docs/series](https://www.mql5.com/en/docs/series) |
 | 7 | [Custom Indicators](#7-custom-indicators) | [/en/docs/customind](https://www.mql5.com/en/docs/customind) |
+| 7b | [OnCalculate deep dive](#7b-oncalculate-deep-dive) | [/event_handlers/oncalculate](https://www.mql5.com/en/docs/event_handlers/oncalculate) |
 | 8 | [Charts, Objects, UI](#8-charts-objects-ui) | [/en/docs/chart_operations](https://www.mql5.com/en/docs/chart_operations) |
+| 8b | [Chart events deep dive](#8b-chart-events-deep-dive) | [/enum_chartevents](https://www.mql5.com/en/docs/constants/chartconstants/enum_chartevents) |
+| 8c | [Economic Calendar](#8c-economic-calendar) | [/en/docs/calendar](https://www.mql5.com/en/docs/calendar) |
 | 9 | [Files, Strings, Math, DateTime](#9-files-strings-math-datetime) | [/en/docs/files](https://www.mql5.com/en/docs/files) |
 | 10 | [Network / WebRequest](#10-network--webrequest) | [/en/docs/network](https://www.mql5.com/en/docs/network) |
 | 11 | [SQLite / Matrix / OpenCL / Python](#11-sqlite--matrix--opencl--python) | [/en/docs/database](https://www.mql5.com/en/docs/database) |
@@ -105,6 +108,21 @@ Critical rules:
 - Dynamic arrays: `ArrayResize`; series indexing via `ArraySetAsSeries`.
 - `NormalizeDouble` for display/digits; for trade prices also align to `SYMBOL_TRADE_TICK_SIZE`.
 
+### Types (official)
+
+Docs: [Data Types](https://www.mql5.com/en/docs/basis/types)
+
+| Kind | Types | Notes |
+|------|-------|-------|
+| Integers | `char`…`ulong` | Fastest |
+| Bool / literals | `bool`, `ushort` char codes | |
+| Floating | `double`, `float` | Prices are `double` (no dedicated price type) |
+| Special ints | `color`, `datetime` | Convenience for Inputs UI; stored as integers |
+| Strings | `string` | Slowest (dynamic alloc) |
+| Complex | `struct`, `class` | Abstract / OOP types |
+
+Expressions use **implicit** casting unless explicit cast is written. Prefer enums over raw ints for API fields.
+
 ---
 
 ## 3. Applications & Events
@@ -119,6 +137,14 @@ Critical rules:
 | Service | **No** | `OnStart`; can `EventChartCustom` | `Services` |
 | Library | — | No events | `Libraries` |
 | Include | — | Compiled in | `Include` |
+
+Docs: [MQL5 Programs / Runtime](https://www.mql5.com/en/docs/runtime)
+
+- Compile → `.ex5` in Experts / Indicators / Scripts (must be error-free).
+- Chart limit: **1 EA + 1 script + unlimited indicators**.
+- EA/indicator stay across terminal restarts; **scripts do not** (run once, then removed).
+- Remove EA via Experts list; AutoTrading button also gates live trading.
+- Services: no chart bind — custom symbols, network loops, helpers.
 
 ### Event handling
 
@@ -211,6 +237,82 @@ Full list: [Trade Server Return Codes](https://www.mql5.com/en/docs/constants/er
 - When closing by index, iterate high → low.
 - Some Market-execution symbols need open without SL/TP then modify.
 
+### MqlTradeRequest fields (official)
+
+Docs: [MqlTradeRequest](https://www.mql5.com/en/docs/constants/structures/mqltraderequest)
+
+| Field | Role |
+|-------|------|
+| `action` | `TRADE_ACTION_DEAL/PENDING/SLTP/MODIFY/REMOVE/CLOSE_BY` |
+| `magic` | EA id for analytics / filtering |
+| `order` | Pending ticket (modify/delete) |
+| `symbol` | Symbol (not always needed for close/modify) |
+| `volume` | Lots requested |
+| `price` | Open / pending price; **Market execution** deals may omit |
+| `stoplimit` | StopLimit child Limit price |
+| `sl` / `tp` | Stop levels |
+| `deviation` | Max slippage in points |
+| `type` | `ORDER_TYPE_*` |
+| `type_filling` | FOK / IOC / BOC / RETURN |
+| `type_time` / `expiration` | GTC / DAY / SPECIFIED |
+| `comment` | Order comment |
+| `position` | **Required** on hedge close/modify |
+| `position_by` | Opposite ticket for close-by |
+
+**Required fields by execution mode (open DEAL):**
+
+| Mode | Must set |
+|------|----------|
+| Request / Instant | action, symbol, volume, price, sl, tp, deviation, type, type_filling |
+| Market / Exchange | action, symbol, volume, type, type_filling (+ magic/comment optional) |
+
+Always zero-init: `MqlTradeRequest request={}; MqlTradeResult result={};`
+
+### Order types · states · filling matrix
+
+Docs: [Order Properties](https://www.mql5.com/en/docs/constants/tradingconstants/orderproperties)
+
+**Types:** BUY/SELL, BUY/SELL_LIMIT, BUY/SELL_STOP, BUY/SELL_STOP_LIMIT, CLOSE_BY.
+
+**States:** STARTED → PLACED → PARTIAL/FILLED | CANCELED | REJECTED | EXPIRED (+ REQUEST_* while in flight).
+
+**Filling vs execution (official table):**
+
+| | FOK | IOC | RETURN |
+|--|-----|-----|--------|
+| Instant / Request | always | always | always |
+| Market | per symbol flags | per symbol flags | **disabled** |
+| Exchange | per symbol flags | per symbol flags | always |
+
+Pending → always prefer `ORDER_FILLING_RETURN`. BOC only for Limit / StopLimit (passive book).
+
+**Order lifetime:** `ORDER_TIME_GTC`, `DAY`, `SPECIFIED`, `SPECIFIED_DAY` (expires 23:59:59 of day).
+
+### OnTrade / OnTradeTransaction
+
+Docs: [OnTrade](https://www.mql5.com/en/docs/event_handlers/ontrade) · [OnTradeTransaction](https://www.mql5.com/en/docs/event_handlers/ontradetransaction)
+
+- EA only. Call `HistorySelect` before reading history deals/orders.
+- One request can produce **many** trade events; do not assume 1:1.
+- `OnTrade()` runs **after** related `OnTradeTransaction()` calls; counts may differ.
+- Prefer `OnTradeTransaction` for precise deal/order/position deltas; use `OnTrade` for aggregate refresh.
+
+`void OnTradeTransaction(const MqlTradeTransaction& trans, const MqlTradeRequest& request, const MqlTradeResult& result);`
+
+| `trans.type` | Meaning |
+|--------------|---------|
+| `ORDER_ADD/UPDATE/DELETE` | Active order list change |
+| `DEAL_ADD/UPDATE/DELETE` | History deal change |
+| `HISTORY_ADD/UPDATE/DELETE` | History order change |
+| `POSITION` | Position change **not** from a deal (e.g. SL/TP modify) |
+| `REQUEST` | Request processed — **then** read `request` + `result` |
+
+Official notes:
+
+- Buy market → chain: request → order add → fill → order delete → history add → deal add → position. Arrival **order not guaranteed**.
+- While handling one tx, account state may already change; queue length **1024** — slow handlers drop old events.
+- For `DEAL_ADD`, select deal then read `DEAL_EXTERNAL_ID` if exchange ticket needed.
+
 ---
 
 ## 5. Market / Account / Terminal
@@ -273,6 +375,35 @@ int OnCalculate(const int rates_total, const int prev_calculated,
 }
 ```
 
+### 7b. OnCalculate deep dive
+
+Docs: [OnCalculate](https://www.mql5.com/en/docs/event_handlers/oncalculate)
+
+**Only one of the two overloads** may exist in a single indicator.
+
+| Form | Signature idea | When |
+|------|----------------|------|
+| Applied-price | `(rates_total, prev_calculated, begin, price[])` | User picks Apply-to; `_AppliedTo` |
+| OHLC series | `(rates_total, prev_calculated, time, open, high, low, close, tick_volume, volume, spread)` | Full bar data |
+
+Rules (official):
+
+- Return value becomes next call’s `prev_calculated`. **Return 0** → nothing shown in DataWindow.
+- History load / gap fill → terminal sets `prev_calculated = 0` (full recalc).
+- Call `ArraySetAsSeries` yourself — do not rely on defaults for `time[]`/`open[]`/…
+- `begin` skips leading invalid data in applied-price form; start calc at `(period-1)+begin`.
+- Other programs read via `iCustom()`; applied-price/`handle` is the **last** custom input when chaining.
+
+Incremental loop pattern (series=false indexing as in docs samples):
+
+```cpp
+int pos = prev_calculated - 1;
+if(pos < start) pos = start;
+for(int i = pos; i < rates_total && !IsStopped(); i++)
+  Buf[i] = /* calc */;
+return rates_total;
+```
+
 ---
 
 ## 8. Charts, Objects, UI
@@ -284,14 +415,78 @@ int OnCalculate(const int rates_total, const int prev_calculated,
 - Delete objects by iterating **reverse** order.
 - Separate name prefixes for panel widgets vs chart trading lines.
 
+### 8b. Chart events deep dive
+
+Docs: [ENUM_CHART_EVENT](https://www.mql5.com/en/docs/constants/chartconstants/enum_chartevents)
+
+| Event | Enable flag (if needed) | lparam | dparam | sparam |
+|-------|-------------------------|--------|--------|--------|
+| `KEYDOWN` / `KEYUP` | — | key code | repeats (keyup=1) | modifier bitmask string |
+| `MOUSE_MOVE` | `CHART_EVENT_MOUSE_MOVE` | X | Y | button bitmask string |
+| `MOUSE_WHEEL` | `CHART_EVENT_MOUSE_WHEEL` | packed flags+XY | delta (±120) | — |
+| `CLICK` | — | X | Y | — |
+| `OBJECT_CLICK` | — | X | Y | object name |
+| `OBJECT_DRAG` / `ENDEDIT` / `CHANGE` | — | — | — | object name |
+| `OBJECT_CREATE` / `DELETE` | `CHART_EVENT_OBJECT_CREATE/DELETE` | — | — | object name |
+| `CHART_CHANGE` | — | — | — | — |
+| `CUSTOM` … `CUSTOM_LAST` | via `EventChartCustom` | custom | custom | custom |
+
+Panel checklist:
+
+```cpp
+ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
+// optional: CHART_CONTEXT_MENU=false, CHART_CROSSHAIR_TOOL=false for drag UX
+ChartRedraw(); // after enabling event props
+```
+
+`MOUSE_MOVE` sparam bits: 1 L, 2 R, 4 SHIFT, 8 CTRL, 16 Mid, 32/64 X buttons.  
+`TranslateKey(key)` for KEYDOWN/KEYUP text (incl. dead keys).
+
+### 8c. Economic Calendar
+
+Docs: [Calendar](https://www.mql5.com/en/docs/calendar) · [structures](https://www.mql5.com/en/docs/constants/structures/mqlcalendar)
+
+| API | Use |
+|-----|-----|
+| `CalendarCountries` / `CalendarCountryById` | ISO country list |
+| `CalendarEventByCountry` / `ByCurrency` / `ById` | event meta |
+| `CalendarValueHistory` / `HistoryByEvent` | range query (**TimeTradeServer** timezone) |
+| `CalendarValueLast` / `LastByEvent` | incremental via `change_id` |
+
+Structures: `MqlCalendarCountry`, `MqlCalendarEvent`, `MqlCalendarValue`.
+
+**Critical:** `actual_value` / `prev_value` / `forecast_value` / `revised_prev_value` are stored ×1e6, or `LONG_MIN` if unset. Prefer:
+
+```cpp
+if(v.HasActualValue()) double x = v.GetActualValue(); // else nan
+```
+
+Importance: `CALENDAR_IMPORTANCE_LOW/MODERATE/HIGH`. Filter by currency matching symbol base/quote for news filters / COT-adjacent workflows.
+
 ---
 
 ## 9. Files, Strings, Math, DateTime
 
-- Files live under `MQL5/Files` (or common folder with `FILE_COMMON`).
-- Use correct flags: `FILE_READ/WRITE`, `FILE_BIN/TXT/CSV`, `FILE_UNICODE/ANSI`, `FILE_SHARE_*`.
+Docs: [File Functions](https://www.mql5.com/en/docs/files)
+
+Sandbox only:
+
+- `TERMINAL_DATA_PATH\MQL5\Files\`
+- Common: `TERMINAL_COMMONDATA_PATH\Files\` via `FILE_COMMON`
+
+| Flag group | Examples |
+|------------|----------|
+| Access | `FILE_READ`, `FILE_WRITE`, `FILE_REWRITE` |
+| Format | `FILE_BIN`, `FILE_TXT`, `FILE_CSV` |
+| Encoding | `FILE_ANSI`, `FILE_UNICODE` |
+| Share | `FILE_SHARE_READ`, `FILE_SHARE_WRITE` |
+| Place | `FILE_COMMON`, `FILE_TXT`+CSV delimiter in open |
+
+`FileOpen` creates missing subfolders on write. Named pipes supported via `FileOpen` params.  
+Also: `FileLoad`/`FileSave`, `FolderCreate`/`Delete`/`Clean`, find APIs.
+
 - Strings: prefer `StringFormat`; beware encoding when mixing File + Web.
-- Time: distinguish `TimeCurrent` (server), `TimeTradeServer`, `TimeLocal`, `TimeGMT`.
+- Time: `TimeCurrent` (last tick server), `TimeTradeServer`, `TimeLocal`, `TimeGMT`. Calendar APIs use **trade server** time.
 
 ---
 
