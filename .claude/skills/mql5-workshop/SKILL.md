@@ -5,9 +5,9 @@ description: "Full MQL5 Reference curriculum aligned to https://www.mql5.com/en/
 
 # MQL5 Workshop (Official Docs Curriculum)
 
-**Source of truth**: [MQL5 Reference (EN)](https://www.mql5.com/en/docs) · [中文](https://www.mql5.com/zh/docs)
+**Source of truth**: [MQL5 Reference (EN)](https://www.mql5.com/en/docs) · [中文](https://www.mql5.com/zh/docs) · offline `mql5.chm` corpus (`mql5-ebook-corpus/`, 4134 pages / 7.3M chars)
 
-**Agent rule**: When writing or reviewing MQL5, verify signatures, enums, and retcodes against the official Reference. This skill is the **complete curriculum map** of that documentation plus battle-tested patterns. Do **not** invent APIs. If unsure, open the linked doc page for that topic.
+**Agent rule**: When writing or reviewing MQL5, verify signatures, enums, and retcodes against the official Reference / CHM text. This skill is the **complete curriculum map** of that documentation plus battle-tested patterns. Do **not** invent APIs. If unsure, open the linked doc page or `mql5-ebook-corpus/pages/<topic>.htm.txt`.
 
 ---
 
@@ -100,12 +100,26 @@ Sections to master: Syntax · Data Types · Operations · Operators · Functions
 Critical rules:
 
 - MQL5 ≈ C++ subset + trading/event extensions (enumerations, structures, classes, event handlers).
+- **Not C++:** no address arithmetic, no `goto`, no anonymous enums, **no multiple inheritance**.
+- Identifiers ≤ **63** chars; reserved words listed in Reference.
+- Structures are packed **without padding** (like `#pragma pack(1)`); insert reserved fields if you need alignment for DLL.
+- Object “pointers” are **8-byte descriptors**, not raw memory addresses; pass objects by reference; `new` only for **classes** (not structs/arrays) → `delete` + set NULL.
+- `complex` may pass **by value** to MQL5 functions; to DLL **by reference only**.
+- Functions: ≤ **64** parameters; cannot `return` arrays / class objects / compound structs.
+- `switch` expression must be `int`/`uint`.
+- Array out-of-bounds / div-by-zero / bad pointer → **critical** → program stops.
+- Long loops: check `IsStopped()`.
+- Double equality: compare `NormalizeDouble(a-b, digits)==0` (never raw `==`).
+- Boolean ops use **short-circuit** evaluation.
+- Matrix multiply operator: `@` (same element types).
+- `#property` in **included files is ignored** — put properties in the main `.mq5`.
 - Strict typing; prefer `datetime`, `color`, `enumerations` over magic ints.
 - `#property` sets program metadata (strict, copyright, indicator buffers/plots, script show confirm…).
 - `#include <file.mqh>` → `MQL5/Include`; `#include "file.mqh"` → beside the source.
-- OOP: classes, inheritance, virtual methods; Standard Library is OOP-first.
-- Dynamic arrays: `ArrayResize`; series indexing via `ArraySetAsSeries`.
+- OOP: classes, inheritance, virtual methods, templates, abstract (`=0`), namespaces; StdLib is OOP-first.
+- Dynamic arrays: max **4** dims; `ArrayResize`; series indexing via `ArraySetAsSeries`.
 - `NormalizeDouble` for display/digits; for trade prices also align to `SYMBOL_TRADE_TICK_SIZE`.
+- Static locals/globals: init once before `OnInit`; locals re-init every call unless `static`.
 
 ### Input variables
 
@@ -917,10 +931,13 @@ Docs: [OOP](https://www.mql5.com/en/docs/basis/oop) — encapsulation, inheritan
 
 ## 13. Testing & Optimization
 
-Docs: [OnTester](https://www.mql5.com/en/docs/event_handlers/ontester) · [OnTesterPass](https://www.mql5.com/en/docs/event_handlers/ontesterpass)
+Docs: [OnTester](https://www.mql5.com/en/docs/event_handlers/ontester) · [OnTesterPass](https://www.mql5.com/en/docs/event_handlers/ontesterpass) · ebook `testing.htm`
 
-- Strategy Tester: no `WebRequest`; trade/network limitations apply.
-- `double OnTester()` → custom optimization criterion (**higher = better**; genetic sort descending).
+- Strategy Tester tick modes: **Every tick** · **1 Minute OHLC** · **Open prices only** (+ real ticks option).
+- **Not executed in tester:** `Alert`, `MessageBox`, `PlaySound`, `SendFTP`, `SendMail`, `SendNotification`, `WebRequest`.
+- During **optimization**, `Comment`/`Print`/`PrintFormat` skipped (except inside `OnInit`) for speed.
+- Cloud Network: ≤ **4GB** disk write and ≤ **4GB** RAM per pass; prefer frames over file I/O. Guard: if `MQL_OPTIMIZATION || MQL_FORWARD` → disable file ops.
+- `double OnTester()` → custom criterion (**higher = better**; genetic sort descending).
 - Thin sample history (< ~10 trades) → often return `0` so genetics discard junk.
 - Single-test vs optimize: `MQLInfoInteger(MQL_TESTER)` / `MQL_OPTIMIZATION`.
 
