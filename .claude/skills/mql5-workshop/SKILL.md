@@ -206,6 +206,19 @@ Prefer `int OnInit()` (void form is legacy).
 
 Bad params → `INIT_PARAMETERS_INCORRECT`. Missing indicator handle → `INIT_FAILED`. Prefer `TesterStop()` mid-test over `INIT_FAILED` when possible.
 
+### Timers & custom events
+
+Docs: [Event Functions](https://www.mql5.com/en/docs/eventfunctions)
+
+| Call | Role |
+|------|------|
+| `EventSetTimer(seconds)` | Second-resolution `OnTimer` |
+| `EventSetMillisecondTimer(ms)` | Sub-second `OnTimer` |
+| `EventKillTimer()` | Stop (call in `OnDeinit`) |
+| `EventChartCustom(chart_id, id, lparam, dparam, sparam)` | Fire `CHARTEVENT_CUSTOM+N` |
+
+One timer per chart program; recreate after chartchange. Panel UIs often refresh on timer + chart events.
+
 ---
 
 ## 4. Trading Model
@@ -562,6 +575,8 @@ Docs: [Objects](https://www.mql5.com/en/docs/objects) · [Chart operations](http
 - Delete objects by iterating **reverse** order.
 - Separate name prefixes for panel widgets vs chart trading lines.
 
+**Panel-relevant `ENUM_OBJECT`:** `OBJ_RECTANGLE_LABEL`, `OBJ_LABEL`, `OBJ_BUTTON`, `OBJ_EDIT`, `OBJ_BITMAP_LABEL`, `OBJ_HLINE`/`TREND` (levels), `OBJ_EVENT` (calendar tag). Full list: [Object Types](https://www.mql5.com/en/docs/constants/objectconstants/enum_object).
+
 ### 8b. Chart events deep dive
 
 Docs: [ENUM_CHART_EVENT](https://www.mql5.com/en/docs/constants/chartconstants/enum_chartevents)
@@ -634,6 +649,14 @@ Also: `FileLoad`/`FileSave`, `FolderCreate`/`Delete`/`Clean`, find APIs.
 
 - Strings: prefer `StringFormat`; beware encoding when mixing File + Web.
 - Time: `TimeCurrent` (last tick server), `TimeTradeServer`, `TimeLocal`, `TimeGMT`. Calendar APIs use **trade server** time.
+
+### Conversion
+
+Docs: [Convert](https://www.mql5.com/en/docs/convert)
+
+- **`NormalizeDouble`**: required accuracy for prices sent to server — never send unnormalized prices with extra digits.
+- Still align to `SYMBOL_TRADE_TICK_SIZE` before normalize (see Quick Reference).
+- `EnumToString`, `TimeToString`/`StringToTime`, `DoubleToString`, `ColorToARGB`, char/short array ↔ string for network/files.
 
 ---
 
