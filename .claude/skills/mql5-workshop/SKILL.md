@@ -205,8 +205,10 @@ Docs: [Event Handling](https://www.mql5.com/en/docs/event_handlers)
 | `OnTrade` | After trade operations complete |
 | `OnTradeTransaction` | Fine-grained transaction stream (preferred for robust EA state) |
 | `OnChartEvent` | Clicks, object drag, keys, custom events |
-| `OnBookEvent` | Depth of Market |
+| `OnBookEvent` | Depth of Market (`MarketBookAdd`/`Release`/`Get`) |
 | `OnTester*` | Optimization / forward testing hooks |
+
+**BookEvent** ([docs](https://www.mql5.com/en/docs/event_handlers/onbookevent)): chart-wide broadcast — filter `symbol`; per-symbol **subscription counters** on the chart (balance `Add`/`Release`); events never skipped (always queued).
 
 ### OnInit return codes
 
@@ -266,6 +268,15 @@ Trading functions: **EA + Script only**, and only if **Allow live trading** is e
 | History | `HistorySelect*`, `HistoryOrdersTotal`, `HistoryDealsTotal`, `HistoryDealGet*`, `HistoryOrderGet*` |
 
 Structures: [`MqlTradeRequest`](https://www.mql5.com/en/docs/constants/structures/mqltraderequest), `MqlTradeResult`, `MqlTradeCheckResult`.
+
+### HistorySelect cache
+
+Docs: [HistorySelect](https://www.mql5.com/en/docs/trading/historyselect)
+
+- Loads order + deal lists for `[from,to]` (server time) into the **program cache**.
+- Then iterate with `HistoryDealsTotal` / `HistoryDealGetTicket` (same for orders).
+- `HistoryDealSelect(ticket)` / `HistoryOrderSelect(ticket)` **reset** the cache to that single item — re-`HistorySelect` afterward if you need the full range again.
+- Always `HistorySelect` before reading history in `OnTrade` / reports.
 
 ### Filling & execution (must get right)
 
@@ -463,9 +474,21 @@ Always inspect `retcode` even when `OrderSend` returns true; use `request_id` fo
 ## 5. Market / Account / Terminal
 
 - [Market Info](https://www.mql5.com/en/docs/marketinfo): `SymbolSelect`, `SymbolInfoInteger/Double/String`, `SymbolInfoTick`, depth of market.
-- [Account](https://www.mql5.com/en/docs/account): `AccountInfoDouble/Integer/String` — balance, equity, margin, currency, trade mode, FIFO (`ACCOUNT_MARGIN_MODE`, `ACCOUNT_FIFO_CLOSE`).
+- [Account](https://www.mql5.com/en/docs/account): `AccountInfoDouble/Integer/String`.
 - [Common / Terminal](https://www.mql5.com/en/docs/common): `TerminalInfoInteger`, DLL/WebRequest allow flags, community connection.
 - Always `SymbolSelect(_Symbol, true)` before heavy symbol queries in multi-symbol EAs.
+
+**Key account props** ([docs](https://www.mql5.com/en/docs/constants/environment_state/accountinformation)):
+
+| Prop | Why it matters |
+|------|----------------|
+| `ACCOUNT_MARGIN_MODE` | Netting / Exchange / **Hedging** |
+| `ACCOUNT_FIFO_CLOSE` | Must close oldest-first (hedge accounts) |
+| `ACCOUNT_HEDGE_ALLOWED` | Opposite positions allowed |
+| `ACCOUNT_TRADE_ALLOWED` / `TRADE_EXPERT` | Manual vs EA trading permission |
+| `ACCOUNT_TRADE_MODE` | Demo / Contest / Real |
+| `LIMIT_ORDERS`, SO call/so levels | Risk limits |
+| Balance/Equity/Margin* | Sizing & margin checks |
 
 ### Date & time
 
@@ -792,9 +815,14 @@ Use `DatabaseReadBind` to fill a struct in one shot. SQL includes stats (`median
 
 ### Matrix · OpenCL · Python
 
-- [Matrix & Vector](https://www.mql5.com/en/docs/matrix): concise numeric code; many `Math*` ops are element-wise.
-- [OpenCL](https://www.mql5.com/en/docs/opencl): GPU acceleration.
-- [Python](https://www.mql5.com/en/docs/python_metatrader5): drive terminal via `MetaTrader5` package for research/automation.
+Docs: [Matrices and vectors](https://www.mql5.com/en/docs/matrix)
+
+- Dynamic `matrix` / `vector` (`double`/`float`/`complex`); init via `Zeros`, `Ones`, `Eye`, `Identity`, `Random`, …
+- Ingest market data: `CopyRates`, `CopyTicks`, `CopyIndicatorBuffer` methods on matrix/vector.
+- Core ops: `MatMul`/`GeMM`, `Dot`, `Inv`/`Solve`/`LstSq`, SVD/QR/LU, stats (`Mean`/`Std`/`Percentile`), ML helpers (activation/loss/confusion).
+- Pass to DLL as raw buffer pointers + sizes.
+
+Also: [OpenCL](https://www.mql5.com/en/docs/opencl) · [Python MetaTrader5](https://www.mql5.com/en/docs/python_metatrader5).
 
 ---
 
