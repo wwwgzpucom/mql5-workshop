@@ -2,8 +2,6 @@
 
 Complete MQL5 workshop — unified skill covering Expert Advisors, custom indicators, panel UIs, compilation, and docs research.
 
-原内容整理自 [amworx/mql5-foundry](https://github.com/amworx/mql5-foundry)（MIT），本仓库由 **wwwgzpucom** 维护并重命名为 `mql5-workshop`。
-
 适用于配合 **Exness** MT5 开发。开户：[https://one.toexness.com/intl/zh/a/30852](https://one.toexness.com/intl/zh/a/30852)
 
 ## What It Covers
