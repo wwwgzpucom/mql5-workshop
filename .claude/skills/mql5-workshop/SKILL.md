@@ -388,9 +388,49 @@ Official notes:
 ## 5. Market / Account / Terminal
 
 - [Market Info](https://www.mql5.com/en/docs/marketinfo): `SymbolSelect`, `SymbolInfoInteger/Double/String`, `SymbolInfoTick`, depth of market.
-- [Account](https://www.mql5.com/en/docs/account): balance, equity, margin, currency, trade mode, FIFO.
+- [Account](https://www.mql5.com/en/docs/account): `AccountInfoDouble/Integer/String` — balance, equity, margin, currency, trade mode, FIFO (`ACCOUNT_MARGIN_MODE`, `ACCOUNT_FIFO_CLOSE`).
 - [Common / Terminal](https://www.mql5.com/en/docs/common): `TerminalInfoInteger`, DLL/WebRequest allow flags, community connection.
 - Always `SymbolSelect(_Symbol, true)` before heavy symbol queries in multi-symbol EAs.
+
+### Date & time
+
+Docs: [Date and Time](https://www.mql5.com/en/docs/dateandtime)
+
+| Call | Meaning |
+|------|---------|
+| `TimeCurrent` | Last quote time (server) |
+| `TimeTradeServer` | Trade server calculation clock (calendar APIs use this) |
+| `TimeLocal` / `TimeGMT` | PC local / GMT (+ DST helpers) |
+| `TimeToStruct` / `StructToTime` | ↔ `MqlDateTime` |
+
+High-res timers: `GetTickCount` / `GetMicrosecondCount`, not `datetime`.
+
+### Terminal global variables
+
+Docs: [Globals](https://www.mql5.com/en/docs/globals) — **not** the same as C++ file-scope globals.
+
+- Shared across all MQL5 programs in the terminal.
+- Persist **4 weeks** after last access (read or write); then auto-deleted.
+- `GlobalVariableSetOnCondition` for simple locks; `GlobalVariableTemp` = session-only; `Flush` to disk.
+
+### OnDeinit reasons
+
+Docs: [OnDeinit](https://www.mql5.com/en/docs/event_handlers/ondeinit)
+
+| Code | When |
+|------|------|
+| `REASON_PROGRAM` (0) | `ExpertRemove()` |
+| `REASON_REMOVE` (1) | Removed from chart |
+| `REASON_RECOMPILE` (2) | Recompiled |
+| `REASON_CHARTCHANGE` (3) | Symbol/TF change |
+| `REASON_CHARTCLOSE` (4) | Chart closed |
+| `REASON_PARAMETERS` (5) | Inputs changed |
+| `REASON_ACCOUNT` (6) | Account switch / reconnect settings |
+| `REASON_TEMPLATE` (7) | Template applied |
+| `REASON_INITFAILED` (8) | `OnInit` non-zero |
+| `REASON_CLOSE` (9) | Terminal exit |
+
+Also: `_UninitReason` / `UninitializeReason()`. On chartchange/params, Init follows Deinit — release handles cleanly then recreate.
 
 ---
 
