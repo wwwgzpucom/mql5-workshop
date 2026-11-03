@@ -123,6 +123,30 @@ Docs: [Data Types](https://www.mql5.com/en/docs/basis/types)
 
 Expressions use **implicit** casting unless explicit cast is written. Prefer enums over raw ints for API fields.
 
+### Arrays
+
+Docs: [Array Functions](https://www.mql5.com/en/docs/array)
+
+- Max **4** dimensions; index `0 … size-1`.
+- Series flag: `ArraySetAsSeries` / `ArrayGetAsSeries` / `ArrayIsSeries` (timeseries vs buffer).
+- Hot APIs: `ArrayResize`, `ArrayCopy`, `ArrayFree`, `ArrayInitialize`/`Fill`, `Maximum`/`Minimum`, `Sort`, `Bsearch`, `Insert`/`Remove`/`Reverse`/`Swap`.
+- Prefer static/preallocated buffers in `OnTick`/`OnCalculate`; avoid thrashing `ArrayResize` every tick.
+
+### Common helpers
+
+Docs: [Common Functions](https://www.mql5.com/en/docs/common)
+
+| Need | Call |
+|------|------|
+| Log | `Print` / `PrintFormat` |
+| Chart text | `Comment` (top-left; easy to overwrite) |
+| Stop EA | `ExpertRemove` |
+| Yield | `Sleep` (EA/script; not in indicators’ calc path) |
+| Timing | `GetTickCount(64)`, `GetMicrosecondCount` |
+| Errors | `ResetLastError`, `SetUserError` |
+| Tester $ | `TesterDeposit` / `Withdrawal` / `Stop` / `Statistics` |
+| Resources | `ResourceCreate` / `Free` / `ReadImage` / `Save` |
+
 ---
 
 ## 3. Applications & Events
@@ -242,6 +266,23 @@ Docs: [Position Properties](https://www.mql5.com/en/docs/constants/tradingconsta
 | `MAGIC`, `SYMBOL`, `COMMENT`, `REASON`, `EXTERNAL_ID` | Filter / audit |
 
 Netting: one position per symbol. Hedging: many; always pass ticket on close/modify.
+
+### Deal properties
+
+Docs: [Deal Properties](https://www.mql5.com/en/docs/constants/tradingconstants/dealproperties)
+
+After `HistorySelect` / `HistoryDealGetTicket`:
+
+| Focus | Identifiers |
+|-------|-------------|
+| Identity | `DEAL_TICKET`, `DEAL_ORDER`, `DEAL_POSITION_ID`, `DEAL_MAGIC` |
+| Economics | `VOLUME`, `PRICE`, `COMMISSION`, `SWAP`, `PROFIT`, `FEE`, `SL`, `TP` |
+| Classification | `DEAL_TYPE` (BUY/SELL + balance/credit/bonus/…), `DEAL_ENTRY` |
+| Audit | `REASON` (CLIENT/EXPERT/SL/TP/SO/ROLLOVER/…), `EXTERNAL_ID` |
+
+**`DEAL_ENTRY`:** `IN` open/add · `OUT` close · `INOUT` reverse · `OUT_BY` close-by.
+
+PnL stats: usually only BUY/SELL with `ENTRY != IN` (fixs that fix P/L). Ignore balance/credit types in strategy metrics.
 
 ### Practical trade gotchas
 
