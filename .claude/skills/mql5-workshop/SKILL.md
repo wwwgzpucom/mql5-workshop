@@ -101,12 +101,23 @@ Critical rules:
 
 - MQL5 ≈ C++ subset + trading/event extensions (enumerations, structures, classes, event handlers).
 - Strict typing; prefer `datetime`, `color`, `enumerations` over magic ints.
-- `input` variables are external parameters (EA/indicator/script inputs).
 - `#property` sets program metadata (strict, copyright, indicator buffers/plots, script show confirm…).
 - `#include <file.mqh>` → `MQL5/Include`; `#include "file.mqh"` → beside the source.
 - OOP: classes, inheritance, virtual methods; Standard Library is OOP-first.
 - Dynamic arrays: `ArrayResize`; series indexing via `ArraySetAsSeries`.
 - `NormalizeDouble` for display/digits; for trade prices also align to `SYMBOL_TRADE_TICK_SIZE`.
+
+### Input variables
+
+Docs: [Input Variables](https://www.mql5.com/en/docs/basis/variables/inputvariables)
+
+- `input` = external, **read-only** in code; re-init before every `OnInit`.
+- Display name: trailing `// comment` or `input(name="…") type var`.
+- No arrays / complex types as inputs. Enums → dropdown (comments as labels).
+- `sinput` = shown but **excluded from optimization** (unless `ParameterSetRange` in `OnTesterInit`).
+- `input group "Name"` → collapsible tester/UI blocks.
+- Scripts need `#property script_show_inputs` to show Inputs tab.
+- `iCustom` args must match custom `input`s; missing → defaults; applied-price/handle last for form-1 indicators.
 
 ### Types (official)
 
@@ -489,6 +500,25 @@ Always inspect `retcode` even when `OrderSend` returns true; use `request_id` fo
 | `ACCOUNT_TRADE_MODE` | Demo / Contest / Real |
 | `LIMIT_ORDERS`, SO call/so levels | Risk limits |
 | Balance/Equity/Margin* | Sizing & margin checks |
+
+**Symbol trade props** ([marketinfoconstants](https://www.mql5.com/en/docs/constants/environment_state/marketinfoconstants)):
+
+| Prop | Use |
+|------|-----|
+| `SYMBOL_DIGITS` / `POINT` / `TRADE_TICK_SIZE` | Normalize prices |
+| `SYMBOL_ASK` / `BID` / `SPREAD` | Quotes |
+| `SYMBOL_VOLUME_MIN/MAX/STEP/LIMIT` | Lot validation |
+| `SYMBOL_TRADE_STOPS_LEVEL` / `FREEZE_LEVEL` | SL/TP / modify distance |
+| `SYMBOL_TRADE_EXEMODE` | Request/Instant/Market/Exchange |
+| `SYMBOL_FILLING_MODE` | FOK\|IOC\|BOC flags |
+| `SYMBOL_TRADE_MODE` | Disabled / long-only / short-only / close-only / full |
+| `SYMBOL_TRADE_TICK_VALUE*` / `CONTRACT_SIZE` | Risk in money |
+
+```cpp
+bool IsFillingTypeAllowed(string sym, int fill) {
+  return ((SymbolInfoInteger(sym, SYMBOL_FILLING_MODE) & fill) == fill);
+}
+```
 
 ### Date & time
 

@@ -17,13 +17,13 @@ Skill file: `.claude/skills/mql5-workshop/SKILL.md`
 
 ## What agents get
 
-- Complete atlas of official doc categories with URLs
-- Trading deep dive: `MqlTradeRequest`, filling×execution matrix, OnTradeTransaction types
-- OnCalculate dual forms, chart-event param tables, Economic Calendar (×1e6 values)
-- Files sandbox, runtime program rules, timeseries/CopyBuffer notes
-- Standard Library map (`Trade`, `Controls`, …)
-- Panel EA patterns + compilation (F7)
-- Mandate: official docs are source of truth
+- Full official-docs curriculum (~760+ lines) with deep API tables
+- Trading: request/result/check, HistorySelect cache, positions/deals, BookEvent
+- Indicators: OnCalculate forms, draw styles, iCustom paths, MqlRates/Tick
+- Charts/UI: events, Controls library, object types, Calendar
+- Files, SQLite, Matrix/Vector, timers, errors, tester OnTester
+- Panel EA patterns + F7 compile notes
+- Mandate: https://www.mql5.com/en/docs is source of truth
 
 ## License
 
