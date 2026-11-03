@@ -1,28 +1,28 @@
 # MQL5 Workshop
 
-Docs-aligned MQL5 workshop skill for Expert Advisors, indicators, panel UIs, trading APIs, compilation, and official Reference lookup.
+Agent skill that maps and teaches the full official **MQL5 Reference**.
 
-官方文档：[https://www.mql5.com/en/docs](https://www.mql5.com/en/docs) · [中文](https://www.mql5.com/zh/docs)
+- EN: https://www.mql5.com/en/docs  
+- ZH: https://www.mql5.com/zh/docs  
 
-适用于配合 **Exness** MT5 开发。开户：[https://one.toexness.com/intl/zh/a/30852](https://one.toexness.com/intl/zh/a/30852)
+适用于配合 **Exness** MT5 开发。开户：https://one.toexness.com/intl/zh/a/30852
 
-## What It Covers
-
-| Section | Content |
-|---------|---------|
-| General MQL5 Development | App types, event handlers, structure, gotchas |
-| Indicator Development | Buffers, OnCalculate, scale, templates |
-| Panel EA Patterns | Panel UI, chart objects, multi-TP, trade helpers |
-| Compilation & Build | MetaEditor F7 / Wine |
-| Docs Research | Official anchors + retcode workflow |
-
-## Installation
+## Install
 
 ```bash
 npx skills add wwwgzpucom/mql5-workshop --skill mql5-workshop
 ```
 
-Skill path: `.claude/skills/mql5-workshop/SKILL.md`
+Skill file: `.claude/skills/mql5-workshop/SKILL.md`
+
+## What agents get
+
+- Complete atlas of official doc categories with URLs
+- Critical rules for trading (order/deal/position, filling, retcodes)
+- Events, timeseries, indicators, charts/objects, files, network
+- Standard Library map (`Trade`, `Controls`, …)
+- Panel EA patterns + compilation (F7)
+- Mandate: official docs are source of truth
 
 ## License
 
