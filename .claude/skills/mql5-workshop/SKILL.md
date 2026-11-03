@@ -442,6 +442,22 @@ if(!OrderCheck(request, check)) { /* GetLastError + check.retcode/comment */ }
 
 True = structure OK / basic check passed — **not** a guarantee `OrderSend` succeeds (e.g. market closed → send fails after check OK).
 
+### MqlTradeResult
+
+Docs: [MqlTradeResult](https://www.mql5.com/en/docs/constants/structures/mqltraderesult)
+
+| Field | Use |
+|-------|-----|
+| `retcode` | Trade server code (10009 DONE, 10030 INVALID_FILL, …) |
+| `deal` / `order` | Tickets when created |
+| `volume` / `price` | Broker-confirmed fill |
+| `bid` / `ask` | Requote prices |
+| `comment` | Broker text / retcode description |
+| `request_id` | Terminal id — match async `OrderSendAsync` → `OnTradeTransaction` REQUEST |
+| `retcode_external` | External/exchange system code (broker-specific) |
+
+Always inspect `retcode` even when `OrderSend` returns true; use `request_id` for async correlation.
+
 ---
 
 ## 5. Market / Account / Terminal
@@ -821,6 +837,23 @@ trade.SetDeviationInPoints(slippage);
 ```
 
 Prefer StdLib wrappers for production speed unless you need raw `OrderSend` control.
+
+### Controls (`Include\Controls\`)
+
+Docs: [Panels and Dialogs](https://www.mql5.com/en/docs/standardlibrary/controls) · sample `Experts\Examples\Controls`
+
+| Layer | Classes |
+|-------|---------|
+| Base | `CWnd`, `CWndObj`, `CWndContainer` |
+| Simple | `CLabel`, `CButton`, `CEdit`, `CPanel`, `CBmpButton`, `CPicture` |
+| Complex | `CListView`, `CComboBox`, `CCheckBox`/`Group`, `CRadioButton`/`Group`, `CSpinEdit`, scrolls |
+| App shell | `CDialog`, **`CAppDialog`** (main dialog) |
+
+Object-only panels (raw `OBJ_*`) are fine for thin UIs; prefer Controls when you need dialogs/lists/scroll.
+
+### OOP (language)
+
+Docs: [OOP](https://www.mql5.com/en/docs/basis/oop) — encapsulation, inheritance, polymorphism, overloading, virtuals. StdLib is OOP-first; keep trade/UI logic in classes with clear ownership of handles/timers/objects.
 
 ---
 
