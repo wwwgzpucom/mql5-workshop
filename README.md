@@ -1,11 +1,11 @@
 # MQL5 Workshop
 
-Agent skill that maps and teaches the full official **MQL5 Reference**.
+Routing-first agent skill for official **MQL5 Reference** (EN/ZH) + offline CHM corpus.
 
-- EN: https://www.mql5.com/en/docs  
-- ZH: https://www.mql5.com/zh/docs  
+- EN: https://www.mql5.com/en/docs
+- ZH: https://www.mql5.com/zh/docs
 
-适用于配合 **Exness** MT5 开发。开户：https://one.toexness.com/intl/zh/a/30852
+Works with **Exness** MT5. Intro: https://one.toexness.com/intl/zh/a/30852
 
 ## Install
 
@@ -13,17 +13,18 @@ Agent skill that maps and teaches the full official **MQL5 Reference**.
 npx skills add wwwgzpucom/mql5-workshop --skill mql5-workshop
 ```
 
-Skill file: `.claude/skills/mql5-workshop/SKILL.md`
+Skill: `.claude/skills/mql5-workshop/SKILL.md`
 
-## What agents get
+## Design
 
-- Full official-docs curriculum (~760+ lines) with deep API tables
-- Trading: request/result/check, HistorySelect cache, positions/deals, BookEvent
-- Indicators: OnCalculate forms, draw styles, iCustom paths, MqlRates/Tick
-- Charts/UI: events, Controls library, object types, Calendar
-- Files, SQLite, Matrix/Vector, timers, errors, tester OnTester
-- Panel EA patterns + F7 compile notes
-- Mandate: https://www.mql5.com/en/docs is source of truth
+1. **Task router** — jump by job (trade / indicator / panel / tester / …)
+2. **Hard rules** — verified against official docs / `mql5.chm`
+3. **Anti-patterns** — common failures with corpus page stems
+4. **Playbooks** — minimal correct sequences, not encyclopedia dumps
+5. **Atlas** — where to look up; StdLib/indicators stay as indexes
+6. **Ship checklist** — compile + runtime self-check
+
+Local corpus (optional): `mql5-ebook-corpus/pages/<topic>.htm.txt`
 
 ## License
 
