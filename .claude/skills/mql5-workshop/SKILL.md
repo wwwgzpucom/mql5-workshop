@@ -191,6 +191,21 @@ Docs: [Event Handling](https://www.mql5.com/en/docs/event_handlers)
 | `OnBookEvent` | Depth of Market |
 | `OnTester*` | Optimization / forward testing hooks |
 
+### OnInit return codes
+
+Docs: [OnInit](https://www.mql5.com/en/docs/event_handlers/oninit)
+
+Prefer `int OnInit()` (void form is legacy).
+
+| Code | Effect |
+|------|--------|
+| `INIT_SUCCEEDED` (0) | OK |
+| `INIT_FAILED` | EA unloaded; indicator stays but **handlers stop**. Tester reloads EA next pass (slow) |
+| `INIT_PARAMETERS_INCORRECT` | Skip this input set in optimization (red row); agent gets new task |
+| `INIT_AGENT_NOT_SUITABLE` | Agent banned for rest of this optimization (RAM/OpenCL/…) |
+
+Bad params → `INIT_PARAMETERS_INCORRECT`. Missing indicator handle → `INIT_FAILED`. Prefer `TesterStop()` mid-test over `INIT_FAILED` when possible.
+
 ---
 
 ## 4. Trading Model
@@ -404,6 +419,19 @@ Docs: [Custom Indicators](https://www.mql5.com/en/docs/customind) · `OnCalculat
 - Recalc from `prev_calculated` (usually `prev_calculated-1` for current bar updates).
 - Return `rates_total` on success.
 - Indicators **must not** call trade functions / `WebRequest`.
+
+### Draw styles
+
+Docs: [Drawing Styles](https://www.mql5.com/en/docs/constants/indicatorconstants/drawstyles)
+
+| Style | Data bufs | Color buf |
+|-------|-----------|-----------|
+| `DRAW_NONE/LINE/SECTION/HISTOGRAM/ARROW` | 1 | 0 |
+| `DRAW_HISTOGRAM2/ZIGZAG/FILLING` | 2 | 0 |
+| `DRAW_BARS/CANDLES` | 4 | 0 |
+| `DRAW_COLOR_*` variants | same + | 1 |
+
+Color buffers bind **after** value buffers. Plot props: `PLOT_DRAW_BEGIN`, `EMPTY_VALUE`, `LINE_STYLE/WIDTH/COLOR`, `LABEL`, `SHIFT`, `ARROW`. Line styles (`STYLE_SOLID`…) only for width 0–1.
 
 ### Minimal pattern
 
@@ -696,7 +724,26 @@ Chinese: https://www.mql5.com/zh/docs
 
 ---
 
-## 17. Quick Reference
+## 17. Runtime errors (frequent)
+
+Docs: [Error Codes](https://www.mql5.com/en/docs/constants/errorswarnings/errorcodes) — `GetLastError` / `_LastError`; clear with `ResetLastError`.
+
+| Code | Constant | Typical cause |
+|------|----------|---------------|
+| 4014 | `FUNCTION_NOT_ALLOWED` | Trade/`WebRequest`/`Sleep` from wrong program type |
+| 4024 | `INVALID_HANDLE` | Bad indicator/file/socket handle |
+| 4108 | `CHART_CANNOT_CREATE_TIMER` | `EventSetTimer` failed |
+| 4202 | `OBJECT_NOT_FOUND` | Wrong object name |
+| 4301/4302 | market unknown / not selected | Call `SymbolSelect` first |
+| 4401–4407 | history errors | Bars not ready / timeout / buffer small |
+| 4752–4758 | trade context | AutoTrading / trade disabled |
+| 4806–4802 | indicator buffer/copy | Wrong buffer / data not ready |
+
+Trade **server** retcodes (10004+) are separate — see §4; do not confuse with runtime 4xxx.
+
+---
+
+## 18. Quick Reference
 
 ```cpp
 // Pip
