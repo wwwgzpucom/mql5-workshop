@@ -229,6 +229,20 @@ Full list: [Trade Server Return Codes](https://www.mql5.com/en/docs/constants/er
 | 10027 | `CLIENT_DISABLES_AT` | AutoTrading off in terminal |
 | 10045 | `FIFO_CLOSE` | FIFO close rule |
 
+### Position properties
+
+Docs: [Position Properties](https://www.mql5.com/en/docs/constants/tradingconstants/positionproperties)
+
+| Property | Note |
+|----------|------|
+| `POSITION_TICKET` | Use in `MqlTradeRequest::position`; may change after server service ops |
+| `POSITION_IDENTIFIER` | Stable life-cycle id; links orders/deals; **unchanged** on netting reverse (ticket changes) |
+| `POSITION_TYPE` | `BUY` / `SELL` |
+| `VOLUME`, `PRICE_OPEN`, `SL`, `TP`, `PRICE_CURRENT`, `SWAP`, `PROFIT` | Doubles |
+| `MAGIC`, `SYMBOL`, `COMMENT`, `REASON`, `EXTERNAL_ID` | Filter / audit |
+
+Netting: one position per symbol. Hedging: many; always pass ticket on close/modify.
+
 ### Practical trade gotchas
 
 - Netting vs Hedging: `AccountInfoInteger(ACCOUNT_MARGIN_MODE)`.
@@ -408,9 +422,12 @@ return rates_total;
 
 ## 8. Charts, Objects, UI
 
-- [Chart operations](https://www.mql5.com/en/docs/chart_operations): `ChartRedraw`, `ChartID`, navigate, apply template.
-- [Objects](https://www.mql5.com/en/docs/objects): `ObjectCreate` / `ObjectSetInteger` / `ObjectSetString` / `ObjectsTotal`.
-- [Chart events](https://www.mql5.com/en/docs/constants/chartconstants/enum_chartevents): click, drag, keydown, custom.
+Docs: [Objects](https://www.mql5.com/en/docs/objects) · [Chart operations](https://www.mql5.com/en/docs/chart_operations)
+
+- Object create/set/move enqueue chart commands — **not** instantly visible; call `ChartRedraw()` after UI batches.
+- Names must be unique per chart (incl. subwindows). Rename = DELETE old + CREATE new events.
+- Core API: `ObjectCreate`, `ObjectDelete`, `ObjectsDeleteAll`, `ObjectFind`, `ObjectMove`, `ObjectsTotal`, `ObjectGet*/Set*`, `ObjectGetValueByTime` / `GetTimeByValue`.
+- Text resources: `TextSetFont`, `TextOut`, `TextGetSize`.
 - Standard UI: [`Include\Controls\`](https://www.mql5.com/en/docs/standardlibrary/controls) (dialogs, buttons, edits).
 - Delete objects by iterating **reverse** order.
 - Separate name prefixes for panel widgets vs chart trading lines.
@@ -525,15 +542,42 @@ Docs: [Standard Library](https://www.mql5.com/en/docs/standardlibrary) under `MQ
 | Files / Strings | `Include\Files\`, `Include\Strings\` |
 | Math / OpenCL | `Include\Math\`, `Include\OpenCL\` |
 
+### Trade classes (`Include\Trade\`)
+
+Docs: [Trade Classes](https://www.mql5.com/en/docs/standardlibrary/tradeclasses)
+
+| Class | Role |
+|-------|------|
+| `CTrade` | Send deals / pending / modify / close |
+| `CPositionInfo` | Read open positions |
+| `COrderInfo` / `CHistoryOrderInfo` | Pending + history orders |
+| `CDealInfo` | History deals |
+| `CSymbolInfo` | Symbol props cache |
+| `CAccountInfo` | Account props |
+| `CTerminalInfo` | Terminal environment |
+
+Typical init (from official OnTester sample):
+
+```cpp
+trade.SetExpertMagicNumber(MAGIC);
+trade.SetMarginMode();
+trade.SetTypeFillingBySymbol(_Symbol);
+trade.SetDeviationInPoints(slippage);
+```
+
 Prefer StdLib wrappers for production speed unless you need raw `OrderSend` control.
 
 ---
 
 ## 13. Testing & Optimization
 
-- Strategy Tester supports indicators differently (many network/trade limitations).
-- Use `OnTester`, `OnTesterInit`, `OnTesterDeinit`, `OnTesterPass` for custom metrics / frames.
-- Optimization types documented under Testing section — pick criterion consciously (balance, custom `OnTester` return).
+Docs: [OnTester](https://www.mql5.com/en/docs/event_handlers/ontester) · Testing section of Reference
+
+- Strategy Tester: no `WebRequest`; trade/network limitations apply.
+- `double OnTester()` → custom optimization criterion (**higher = better**; genetic sort descending).
+- Also: `OnTesterInit` / `OnTesterDeinit` / `OnTesterPass` for frames / multi-pass data.
+- Thin sample history (< ~10 trades) → often return `0` so genetics discard junk.
+- Single-test vs optimize: check `MQLInfoInteger(MQL_TESTER)` and `MQL_OPTIMIZATION`.
 
 ---
 
