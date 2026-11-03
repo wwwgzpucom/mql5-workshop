@@ -123,6 +123,23 @@ Docs: [Data Types](https://www.mql5.com/en/docs/basis/types)
 
 Expressions use **implicit** casting unless explicit cast is written. Prefer enums over raw ints for API fields.
 
+### Predefined variables
+
+Docs: [Predefined](https://www.mql5.com/en/docs/predefined) — set by terminal; mostly read-only (`_LastError` cleared via `ResetLastError`).
+
+| Var | Meaning |
+|-----|---------|
+| `_Symbol` / `_Period` | Chart symbol / TF |
+| `_Digits` / `_Point` | Quote digits / point size |
+| `_LastError` | Last error |
+| `_StopFlag` | Stop requested |
+| `_UninitReason` | Deinit reason |
+| `_AppliedTo` | Indicator apply-to data type |
+| `_IsX64` | 64-bit terminal |
+| `_RandomSeed` | PRNG state |
+
+Not defined inside libraries — libraries see the caller’s values.
+
 ### Arrays
 
 Docs: [Array Functions](https://www.mql5.com/en/docs/array)
@@ -217,7 +234,13 @@ Docs: [Event Functions](https://www.mql5.com/en/docs/eventfunctions)
 | `EventKillTimer()` | Stop (call in `OnDeinit`) |
 | `EventChartCustom(chart_id, id, lparam, dparam, sparam)` | Fire `CHARTEVENT_CUSTOM+N` |
 
-One timer per chart program; recreate after chartchange. Panel UIs often refresh on timer + chart events.
+One timer per program; recreate after chartchange. Panel UIs often refresh on timer + chart events.
+
+`OnTimer` notes ([docs](https://www.mql5.com/en/docs/event_handlers/ontimer)):
+
+- Kill in `OnDeinit` (else terminal force-kills on unload).
+- Duplicate Timer while one is queued/processing → **dropped** (same as Tick/ChartEvent).
+- Live hardware floor ~10–16 ms between timer events; tester slows if period too small.
 
 ---
 
@@ -396,6 +419,29 @@ Official notes:
 - While handling one tx, account state may already change; queue length **1024** — slow handlers drop old events.
 - For `DEAL_ADD`, select deal then read `DEAL_EXTERNAL_ID` if exchange ticket needed.
 
+### MqlTradeTransaction field fill
+
+Docs: [MqlTradeTransaction](https://www.mql5.com/en/docs/constants/structures/mqltradetransaction)
+
+| `trans.type` | Meaningful fields |
+|--------------|-------------------|
+| `ORDER_*` / `HISTORY_*` | order, symbol, order_type/state, time_*, prices, volume, position(/_by) |
+| `DEAL_*` | deal, order, symbol, deal_type, price, sl/tp, volume, position(/_by) |
+| `POSITION` | symbol, deal_type as side, avg price, sl/tp, volume — **not** fired when deal itself opens/closes pos |
+| `REQUEST` | **only** `type`; use `request` + `result` args |
+
+### OrderCheck
+
+Docs: [OrderCheck](https://www.mql5.com/en/docs/trading/ordercheck)
+
+```cpp
+MqlTradeCheckResult check={};
+if(!OrderCheck(request, check)) { /* GetLastError + check.retcode/comment */ }
+// success → check.balance/equity/margin/margin_free/margin_level
+```
+
+True = structure OK / basic check passed — **not** a guarantee `OrderSend` succeeds (e.g. market closed → send fails after check OK).
+
 ---
 
 ## 5. Market / Account / Terminal
@@ -469,6 +515,24 @@ Docs: [Timeseries](https://www.mql5.com/en/docs/series)
 | `iBarShift` / `iHighest` / `iLowest` | Classic shift helpers |
 | `IndicatorCreate` / `Parameters` / `Release` | Generic handle lifecycle |
 
+### MqlRates · MqlTick
+
+Docs: [MqlRates](https://www.mql5.com/en/docs/constants/structures/mqlrates) · [MqlTick](https://www.mql5.com/en/docs/constants/structures/mqltick)
+
+```cpp
+struct MqlRates {
+  datetime time; double open, high, low, close;
+  long tick_volume; int spread; long real_volume;
+};
+struct MqlTick {
+  datetime time; double bid, ask, last;
+  ulong volume; long time_msc; uint flags; double volume_real;
+};
+```
+
+- `CopyRates` → `MqlRates[]`; `SymbolInfoTick` / `CopyTicks` → `MqlTick`.
+- Tick fields always filled (carry prior Ask/Bid/… even if only one changed). Inspect `flags`: `TICK_FLAG_BID/ASK/LAST/VOLUME/BUY/SELL`.
+
 ### iCustom path rules
 
 Docs: [iCustom](https://www.mql5.com/en/docs/indicators/icustom)
@@ -506,6 +570,10 @@ Docs: [Drawing Styles](https://www.mql5.com/en/docs/constants/indicatorconstants
 | `DRAW_COLOR_*` variants | same + | 1 |
 
 Color buffers bind **after** value buffers. Plot props: `PLOT_DRAW_BEGIN`, `EMPTY_VALUE`, `LINE_STYLE/WIDTH/COLOR`, `LABEL`, `SHIFT`, `ARROW`. Line styles (`STYLE_SOLID`…) only for width 0–1.
+
+Buffer roles (`SetIndexBuffer`): `INDICATOR_DATA` · `INDICATOR_COLOR_INDEX` · `INDICATOR_CALCULATIONS` (aux, not plotted).
+
+Indicator window props ([docs](https://www.mql5.com/en/docs/constants/indicatorconstants/customindicatorproperties)): `INDICATOR_DIGITS`, `MINIMUM`/`MAXIMUM`, `LEVELS` + `LEVELVALUE/COLOR/STYLE`, `SHORTNAME`, fixed height flags.
 
 ### Minimal pattern
 
@@ -566,6 +634,8 @@ return rates_total;
 ## 8. Charts, Objects, UI
 
 Docs: [Objects](https://www.mql5.com/en/docs/objects) · [Chart operations](https://www.mql5.com/en/docs/chart_operations)
+
+**Chart ops** (`ChartSetInteger/Double/String`) are asynchronous — queued; force with `ChartRedraw()`. Useful: `ChartID`, `ChartTimePriceToXY` / `XYToTimePrice` (panel hit-testing), `ChartNavigate`, `ChartIndicatorAdd/Delete/Get`, `ChartScreenShot`, `ChartOpen/Close/Next`, drop coords `Chart*OnDropped`.
 
 - Object create/set/move enqueue chart commands — **not** instantly visible; call `ChartRedraw()` after UI batches.
 - Names must be unique per chart (incl. subwindows). Rename = DELETE old + CREATE new events.
@@ -658,6 +728,18 @@ Docs: [Convert](https://www.mql5.com/en/docs/convert)
 - Still align to `SYMBOL_TRADE_TICK_SIZE` before normalize (see Quick Reference).
 - `EnumToString`, `TimeToString`/`StringToTime`, `DoubleToString`, `ColorToARGB`, char/short array ↔ string for network/files.
 
+### Strings
+
+Docs: [Strings](https://www.mql5.com/en/docs/strings)
+
+Hot path: `StringFormat` / `StringConcatenate`, `StringFind`/`Replace`/`Split`/`Substr`, `TrimLeft/Right`, `ToLower/Upper`, `StringReserve` before heavy builds. Prefer reserve/concat over repeated `+` in loops.
+
+### Math
+
+Docs: [Math](https://www.mql5.com/en/docs/math)
+
+Standard trig/exp/log/round + `MathIsValidNumber`, `MathCompareByDigits`, `MathSrand`/`Rand`. Many ops also work **element-wise** on matrices/vectors.
+
 ---
 
 ## 10. Network / WebRequest
@@ -676,10 +758,27 @@ Two overloads: form-urlencoded (cookie/referer) · custom headers (`"Key: Value\
 
 ## 11. SQLite / Matrix / OpenCL / Python
 
-- [Database](https://www.mql5.com/en/docs/database): SQLite built-ins for local storage/analytics.
-- [Matrix & Vector](https://www.mql5.com/en/docs/matrix): concise numeric code.
+### SQLite
+
+Docs: [Database](https://www.mql5.com/en/docs/database)
+
+Whole DB = one file (or `DATABASE_OPEN_MEMORY` for RAM, app-private).
+
+| Flow | Calls |
+|------|-------|
+| Open/close | `DatabaseOpen` / `Close` |
+| DDL/DML | `DatabaseExecute` |
+| Prepared | `Prepare` → `Bind`/`BindArray` → `Read`/`ReadBind` → `Finalize`/`Reset` |
+| Bulk speed | wrap in `TransactionBegin` / `Commit` / `Rollback` (100×+ vs auto-commit) |
+| I/O | `Import` / `Export` / `Print` / `TableExists` |
+
+Use `DatabaseReadBind` to fill a struct in one shot. SQL includes stats (`median`, `percentile_*`, `stddev`, `mode`) and math (`sin`, `pow`, …). Prefer SQL over hand-rolled loops for large history dumps / optimization logs.
+
+### Matrix · OpenCL · Python
+
+- [Matrix & Vector](https://www.mql5.com/en/docs/matrix): concise numeric code; many `Math*` ops are element-wise.
 - [OpenCL](https://www.mql5.com/en/docs/opencl): GPU acceleration.
-- [Python](https://www.mql5.com/en/docs/python_metatrader5): drive terminal from Python (`MetaTrader5` package) for research/automation.
+- [Python](https://www.mql5.com/en/docs/python_metatrader5): drive terminal via `MetaTrader5` package for research/automation.
 
 ---
 
