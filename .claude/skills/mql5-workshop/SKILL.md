@@ -1,10 +1,9 @@
 ---
 name: mql5-workshop
-description: "Comprehensive MQL5 development patterns covering Expert Advisors, custom indicators, panel UIs, order management, compilation, and docs research. Use for ANY MQL5 coding - EAs, indicators, scripts, panels, debugging, compiling, or looking up API docs. Merged from 5 skills: mql-developer, mql5-indicator-patterns, mql5-trade-manager, mql5-x-compile, mql5-docs-research."
-allowed-tools: Read, Grep, Edit, Write, Bash
+description: "Comprehensive MQL5 development patterns covering Expert Advisors, custom indicators, panel UIs, order management, compilation, and docs research. Use for ANY MQL5 coding - EAs, indicators, scripts, panels, debugging, compiling, or looking up API docs."
 ---
 
-# MQL5 Foundry
+# MQL5 Workshop
 
 Complete MQL5 workshop: EA architecture, indicator patterns, panel UIs, compilation, and docs research.
 
@@ -16,7 +15,7 @@ Complete MQL5 workshop: EA architecture, indicator patterns, panel UIs, compilat
 |---------|--------|
 | [1. General MQL5 Development](#1-general-mql5-development) | EA architecture, project structure, coding style, MQL4 vs MQL5 |
 | [2. Indicator Development](#2-indicator-development) | Buffers, OnCalculate, display scale, bar detection, complete template |
-| [3. Panel EA Patterns](#3-panel-ea-patterns) | Edit field safety, OBJ_BUTTON latch, panel drag, chart line drag, multi-TP, RR lock |
+| [3. Panel EA Patterns](#3-panel-ea-patterns) | Edit field safety, OBJ_BUTTON state, panel drag, chart line drag, multi-TP, RR lock |
 | [4. Compilation & Build](#4-compilation--build) | Windows (MetaEditor/build.ps1) and macOS (Wine X:) compilation |
 | [5. Docs Research](#5-docs-research) | MQL5 API error lookup workflow |
 | [Quick Reference](#quick-reference) | All cheatsheets in one place |
@@ -41,12 +40,12 @@ Complete MQL5 workshop: EA architecture, indicator patterns, panel UIs, compilat
 
 ### Critical Gotchas
 
-- **Double comparison**: Never use `==` with doubles. Use `NormalizeDouble()` or tolerance
+- **Double comparison**: Never use `==`/`!=` for prices/computed values. Use `NormalizeDouble()` or an epsilon. Exception: sentinel checks against exact `EMPTY_VALUE` after you assigned `EMPTY_VALUE` yourself
 - **4-digit vs 5-digit brokers**: 1 pip = 1 point (4-digit) or 10 points (5-digit). Always detect via `SYMBOL_DIGITS`
 - **Reverse loop for closing**: Iterate `PositionsTotal()-1` down to `0` when closing positions
 - **ECN brokers**: Some require two-step: `OrderSend()` without SL/TP, then modify
 - **Filling policy**: Always detect via `SYMBOL_FILLING_MODE`, never hardcode FOK
-- **WebRequest**: Synchronous/blocking, not available in indicators or Strategy Tester
+- **WebRequest**: Synchronous/blocking. Works in EAs/scripts/indicators only if the URL is allow-listed in Tools → Options → Expert Advisors. **Not available in the Strategy Tester**
 - **Array indexing**: Series arrays index 0 = newest bar. Use `ArraySetAsSeries()` to control
 
 ### Project Structure
@@ -81,7 +80,7 @@ MQL5/
 - Prefix member variables with `m_` (e.g., `m_magicNumber`)
 - Prefix global variables with `g_` (e.g., `g_isInitialized`)
 - Always use `input` for user parameters (not `extern`)
-- Normalize prices: `NormalizeDouble(price, Digits)`
+- Normalize prices: prefer tick-size rounding, then `NormalizeDouble(price, _Digits)` (or `SYMBOL_DIGITS`)
 - Always check return values of trade operations
 
 ---
@@ -343,18 +342,20 @@ void TM_SafeSetEdit(string name, string text) {
 
 Track `activeEditField` in `CHARTEVENT_OBJECT_BEGINEDIT` and clear in `CHARTEVENT_OBJECT_ENDEDIT`.
 
-### OBJ_BUTTON Double-Fire Latch
+### OBJ_BUTTON Click Handling
 
-Buttons fire `CHARTEVENT_OBJECT_CLICK` on both mouse-down AND mouse-up:
+Prefer handling `CHARTEVENT_OBJECT_CLICK` once, then reset sticky pressed state:
 
 ```cpp
-bool mouseDown = false;
-
-if(ObjectGetInteger(0, sparam, OBJPROP_TYPE) == OBJ_BUTTON) {
-    if(mouseDown) { mouseDown = false; return; }
-    mouseDown = true;
+if(id == CHARTEVENT_OBJECT_CLICK) {
+    if(ObjectGetInteger(0, sparam, OBJPROP_TYPE) == OBJ_BUTTON) {
+        ObjectSetInteger(0, sparam, OBJPROP_STATE, false); // unstick visual press
+        // handle action for sparam once here
+    }
 }
 ```
+
+Avoid fragile mouse-down/up latches that can swallow legitimate clicks.
 
 ### Panel Drag via MOUSE_MOVE
 
@@ -381,9 +382,9 @@ Use `CHARTEVENT_MOUSE_MOVE` with bit 0 of `sparam`. Save position to `GlobalVari
 ### Chart Line Drag Pattern
 
 HLINE/TREND drag has three phases:
-1. **DRAG start**: `CHARTEVENT_OBJECT_DRAG` → set `chartLineDragging = true`
-2. **During drag**: Poll price via `ObjectGetDouble()` in `OnTimer()` at 1s intervals
-3. **Drag end**: `CHARTEVENT_OBJECT_CHANGE` → apply final values
+1. **DRAG start / during drag**: `CHARTEVENT_OBJECT_DRAG` → read price with `ObjectGetDouble()` and update UI live
+2. **Optional fine refresh**: short `OnTimer` (e.g. 100–250 ms) only if needed; **do not** use 1s polling as the primary path
+3. **Drag end**: `CHARTEVENT_OBJECT_CHANGE` (or final DRAG) → apply/normalize SL/TP and send trade modify if required
 
 ### String Helpers (MQL5 compat)
 
@@ -441,22 +442,35 @@ for(int i = 0; i < PositionsTotal(); i++) {
 
 ```cpp
 CTrade g_trade;
+
+ENUM_ORDER_TYPE_FILLING TM_DetectFilling() {
+    uint mode = (uint)SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
+    if((mode & SYMBOL_FILLING_IOC) != 0) return ORDER_FILLING_IOC;
+    if((mode & SYMBOL_FILLING_FOK) != 0) return ORDER_FILLING_FOK;
+    return ORDER_FILLING_RETURN; // only if supported / exchange-style
+}
+
 void TM_OrdersInit() {
     g_trade.SetExpertMagicNumber(TP_MAGIC);
     g_trade.SetDeviationInPoints(30);
-    g_trade.SetTypeFilling(ORDER_FILLING_RETURN);
+    g_trade.SetTypeFilling(TM_DetectFilling()); // never hardcode FOK/IOC/RETURN
 }
 ```
 
 ### Pending Order Broker Compatibility
 
-Some brokers reject SL/TP on pending orders. Retry without them:
+Some brokers reject SL/TP on pending orders. Prefer checking `MqlTradeResult.retcode` from `CTrade` (not a guessed `GetLastError()` pair). Common cases include invalid stops (`TRADE_RETCODE_INVALID_STOPS` = 10016); always log `res.retcode` / `res.comment` and only then retry without SL/TP if your broker docs confirm that policy:
 
 ```cpp
-if(!g_trade.OrderSend(req, res)) {
-    if((slPrice != 0 || tpPrice != 0) && (res.retcode == 10016 || GetLastError() == 4752)) {
-        req.sl = 0;  req.tp = 0;
-        g_trade.OrderSend(req, res);
+MqlTradeRequest req; MqlTradeResult res;
+ZeroMemory(req); ZeroMemory(res);
+// ... fill req ...
+if(!OrderSend(req, res)) {
+    PrintFormat("OrderSend failed retcode=%u comment=%s", res.retcode, res.comment);
+    if((req.sl != 0.0 || req.tp != 0.0) && res.retcode == TRADE_RETCODE_INVALID_STOPS) {
+        req.sl = 0; req.tp = 0;
+        if(OrderSend(req, res))
+            Print("Retried pending without SL/TP; set stops after fill if needed");
     }
 }
 ```
@@ -486,9 +500,10 @@ void TM_CheckMultiTP() {
         if(!m_cfg.tpLevels[i].isActive) continue;
         if(m_cfg.tpLevels[i].isHit) continue;
         double targetDist = m_cfg.tpLevels[i].pipsDist * g_pipSize;
+        // BUY closes on Bid; SELL closes on Ask
         bool hit = (posType == POSITION_TYPE_BUY)
-            ? ((ask - entry) >= targetDist)
-            : ((entry - bid) >= targetDist);
+            ? ((bid - entry) >= targetDist)
+            : ((entry - ask) >= targetDist);
         if(hit) {
             double closeVol = TM_NormalizeLot(vol * m_cfg.tpLevels[i].allocPct / 100.0);
             g_engineTrade.PositionClosePartial(ticket, closeVol);
@@ -626,6 +641,8 @@ if(breachLoss || breachTarget) {
 |---------|-----|
 | `plot()` inside local scope | MQL5 is not Pine. Use `ObjectCreate` for chart objects |
 | `ObjectSetString` on active edit | Guard with `activeEditField` check |
+| Hardcoded `ORDER_FILLING_*` | Detect via `SYMBOL_FILLING_MODE` |
+| BUY TP checked with Ask | Use Bid for BUY exit/TP distance |
 | Same prefix for panel + chart lines | Use separate prefixes so bulk delete is safe |
 | Rebuilding panel during drag | Shift all objects by delta instead |
 | Not iterating in reverse when deleting | Deleted positions shift indices below |
@@ -639,7 +656,7 @@ if(breachLoss || breachTarget) {
 
 ### Windows
 
-**Via MetaEditor GUI**: Open `.mq5` in MetaEditor -> F5 or Compile button.
+**Via MetaEditor GUI**: Open `.mq5` in MetaEditor → **F7** (Compile), or the Compile toolbar button.
 
 **Via build script** (`build.ps1` — tm/ project style): The script compiles `.mq5` files by calling MetaEditor64.exe from the command line.
 
@@ -676,6 +693,7 @@ Check `.ex5` file was created with recent timestamp. Check per-file log for "0 e
 
 Use only official MQL5 documentation:
 - https://www.mql5.com/en/docs
+- https://www.mql5.com/zh/docs (Chinese)
 - https://www.mql5.com/ja/docs (Japanese)
 
 Do not use forums, blogs, or third-party sites.
@@ -687,7 +705,7 @@ Do not use forums, blogs, or third-party sites.
 3. Open most relevant pages to confirm function signatures, parameter types, return values
 4. Produce response with:
    - Summary of the cause
-   - Doc links (JA first, EN second)
+   - Doc links (prefer EN; use ZH/JA if needed)
    - Specific guidance from docs
    - Next checks if ambiguity remains
 
@@ -725,11 +743,14 @@ bool ValidateSLTP(ENUM_TRADE_DIR dir, double entry, double sl, double tp) {
     return !(sl > 0 && sl <= entry) && !(tp > 0 && tp >= entry);
 }
 
-// Trade init
+// Trade init (detect filling; do not hardcode)
 CTrade trade;
 trade.SetExpertMagicNumber(MAGIC);
 trade.SetDeviationInPoints(30);
-trade.SetTypeFilling(ORDER_FILLING_RETURN);
+uint fm = (uint)SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
+if((fm & SYMBOL_FILLING_IOC) != 0) trade.SetTypeFilling(ORDER_FILLING_IOC);
+else if((fm & SYMBOL_FILLING_FOK) != 0) trade.SetTypeFilling(ORDER_FILLING_FOK);
+else trade.SetTypeFilling(ORDER_FILLING_RETURN);
 
 // Safe edit field update
 if(m_state.activeEditField == name) return;
