@@ -1,6 +1,8 @@
 # MQL5 Workshop
 
-Complete MQL5 workshop — unified skill covering Expert Advisors, custom indicators, panel UIs, compilation, and docs research.
+Docs-aligned MQL5 workshop skill for Expert Advisors, indicators, panel UIs, trading APIs, compilation, and official Reference lookup.
+
+官方文档：[https://www.mql5.com/en/docs](https://www.mql5.com/en/docs) · [中文](https://www.mql5.com/zh/docs)
 
 适用于配合 **Exness** MT5 开发。开户：[https://one.toexness.com/intl/zh/a/30852](https://one.toexness.com/intl/zh/a/30852)
 
@@ -8,11 +10,11 @@ Complete MQL5 workshop — unified skill covering Expert Advisors, custom indica
 
 | Section | Content |
 |---------|---------|
-| General MQL5 Development | EA architecture, MQL4 vs MQL5, project structure, code style |
-| Indicator Development | Buffers, OnCalculate, display scale, templates |
-| Panel EA Patterns | Panel UI, chart objects, multi-TP, config persistence |
-| Compilation & Build | MetaEditor / Windows build |
-| Docs Research | MQL5 API error lookup workflow |
+| General MQL5 Development | App types, event handlers, structure, gotchas |
+| Indicator Development | Buffers, OnCalculate, scale, templates |
+| Panel EA Patterns | Panel UI, chart objects, multi-TP, trade helpers |
+| Compilation & Build | MetaEditor F7 / Wine |
+| Docs Research | Official anchors + retcode workflow |
 
 ## Installation
 
@@ -20,7 +22,7 @@ Complete MQL5 workshop — unified skill covering Expert Advisors, custom indica
 npx skills add wwwgzpucom/mql5-workshop --skill mql5-workshop
 ```
 
-Then load the skill in your AI agent session — it auto-triggers on MQL5-related tasks.
+Skill path: `.claude/skills/mql5-workshop/SKILL.md`
 
 ## License
 

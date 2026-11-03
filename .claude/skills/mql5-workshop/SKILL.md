@@ -1,11 +1,13 @@
 ---
 name: mql5-workshop
-description: "Comprehensive MQL5 development patterns covering Expert Advisors, custom indicators, panel UIs, order management, compilation, and docs research. Use for ANY MQL5 coding - EAs, indicators, scripts, panels, debugging, compiling, or looking up API docs."
+description: "Docs-aligned MQL5 workshop for EAs, indicators, scripts, services, panel UIs, trading (CTrade/OrderSend), compilation, and official API lookup. Prefer https://www.mql5.com/en/docs (also zh/docs). Use for ANY MQL5 coding, debugging, compiling, or retcode/error research."
 ---
 
 # MQL5 Workshop
 
-Complete MQL5 workshop: EA architecture, indicator patterns, panel UIs, compilation, and docs research.
+Aligned with the official [MQL5 Reference](https://www.mql5.com/en/docs): application types, event handlers, trading structures, Standard Library `CTrade`, and network rules.
+
+Chinese mirror: [https://www.mql5.com/zh/docs](https://www.mql5.com/zh/docs)
 
 ---
 
@@ -13,75 +15,96 @@ Complete MQL5 workshop: EA architecture, indicator patterns, panel UIs, compilat
 
 | Section | For... |
 |---------|--------|
-| [1. General MQL5 Development](#1-general-mql5-development) | EA architecture, project structure, coding style, MQL4 vs MQL5 |
-| [2. Indicator Development](#2-indicator-development) | Buffers, OnCalculate, display scale, bar detection, complete template |
-| [3. Panel EA Patterns](#3-panel-ea-patterns) | Edit field safety, OBJ_BUTTON state, panel drag, chart line drag, multi-TP, RR lock |
-| [4. Compilation & Build](#4-compilation--build) | Windows (MetaEditor/build.ps1) and macOS (Wine X:) compilation |
-| [5. Docs Research](#5-docs-research) | MQL5 API error lookup workflow |
-| [Quick Reference](#quick-reference) | All cheatsheets in one place |
+| [1. General MQL5 Development](#1-general-mql5-development) | App types, events, project layout, gotchas |
+| [2. Indicator Development](#2-indicator-development) | Buffers, OnCalculate, scale, templates |
+| [3. Panel EA Patterns](#3-panel-ea-patterns) | Chart UI, drag, multi-TP, trade helpers |
+| [4. Compilation & Build](#4-compilation--build) | MetaEditor F7 / Wine |
+| [5. Docs Research](#5-docs-research) | Official doc workflow + key anchors |
+| [Quick Reference](#quick-reference) | Snippets + common trade retcodes |
 
 ---
 
 ## 1. General MQL5 Development
 
+### Application Types (official)
+
+Per [MQL5 Reference](https://www.mql5.com/en/docs):
+
+| Type | Bound to chart? | Main handler | Folder |
+|------|-----------------|--------------|--------|
+| Expert Advisor | Yes | `OnInit`/`OnDeinit`/`OnTick`/`OnTrade`/`OnTradeTransaction`/`OnTimer`/`OnChartEvent`… | `MQL5/Experts` |
+| Custom Indicator | Yes | `OnInit`/`OnDeinit`/`OnCalculate` (+ optional timer/chart events) | `MQL5/Indicators` |
+| Script | Yes (one-shot) | `OnStart` only | `MQL5/Scripts` |
+| Service | **No** | `OnStart` only; can `EventChartCustom` | `MQL5/Services` |
+| Library | — | No event handlers | `MQL5/Libraries` |
+| Include | — | Compiled into callers (`#include`) | `MQL5/Include` (or beside source with `"file.mqh"`) |
+
+Prefer `#include <...>` from `Include/` over Libraries when possible (less call overhead per docs).
+
+### Event Handling (official)
+
+Handlers must match documented signatures exactly or they will not be wired. See [Event Handling](https://www.mql5.com/en/docs/event_handlers).
+
+Queue rules that matter in practice:
+
+- Programs only receive events from **their** chart (except Services).
+- Events are processed **one-by-one**; do **not** use infinite loops in EAs/indicators.
+- If a `NewTick`, `ChartEvent`, or `Timer` event is already queued or being handled, a **new duplicate of that type is discarded**.
+- Queue overflow drops new events — keep handlers short.
+
+| Handler | Typical use |
+|---------|-------------|
+| `OnInit` / `OnDeinit` | Setup / teardown (EA + indicator) |
+| `OnTick` | EA quote-driven logic |
+| `OnCalculate` | Indicator recalculation |
+| `OnTimer` | Periodic UI/trade maintenance (`EventSetTimer` / `EventSetMillisecondTimer`) |
+| `OnTrade` / `OnTradeTransaction` | React to server-side trade results |
+| `OnChartEvent` | Panel clicks, object drag, keys |
+| `OnTester*` | Strategy Tester / optimization hooks |
+
 ### MQL4 vs MQL5 Key Differences
 
 | Aspect | MQL4 | MQL5 |
 |--------|------|------|
-| Paradigm | Procedural (C-like) | Full OOP (C++-like) |
-| Trade model | Orders only (`OrderSend`) | Orders + Deals + Positions (`CTrade`) |
-| Account model | Hedging only | Netting + Hedging |
+| Paradigm | Procedural (C-like) | OOP (C++-like) + Standard Library |
+| Trade model | Ticket orders (`OrderSend` MQL4) | Requests: Orders + Deals + Positions (`OrderSend` + `MqlTradeRequest` / `CTrade`) |
+| Account model | Hedging-oriented | Netting **and** Hedging (`ACCOUNT_MARGIN_MODE`) |
 | Indicator buffers | Max 8 | Max 512 |
-| Draw styles | 6 basic | 18 (basic + color) |
-| Standard Library | Minimal | Comprehensive |
-| Database | None | SQLite built-in |
-| Sockets | None | TCP + TLS |
-| OpenCL | No | Yes |
+| Events | Fewer | Rich predefined set (trade transaction, book, tester…) |
 
 ### Critical Gotchas
 
-- **Double comparison**: Never use `==`/`!=` for prices/computed values. Use `NormalizeDouble()` or an epsilon. Exception: sentinel checks against exact `EMPTY_VALUE` after you assigned `EMPTY_VALUE` yourself
-- **4-digit vs 5-digit brokers**: 1 pip = 1 point (4-digit) or 10 points (5-digit). Always detect via `SYMBOL_DIGITS`
-- **Reverse loop for closing**: Iterate `PositionsTotal()-1` down to `0` when closing positions
-- **ECN brokers**: Some require two-step: `OrderSend()` without SL/TP, then modify
-- **Filling policy**: Always detect via `SYMBOL_FILLING_MODE`, never hardcode FOK
-- **WebRequest**: Synchronous/blocking. Works in EAs/scripts/indicators only if the URL is allow-listed in Tools → Options → Expert Advisors. **Not available in the Strategy Tester**
-- **Array indexing**: Series arrays index 0 = newest bar. Use `ArraySetAsSeries()` to control
+- **Double comparison**: Never use `==`/`!=` for live prices. Use tick-size rounding + `NormalizeDouble`, or epsilon. Exception: exact `EMPTY_VALUE` sentinel after you wrote `EMPTY_VALUE`.
+- **Digits / pip**: Use `SYMBOL_DIGITS` / `_Point`. On 3/5-digit FX symbols, 1 pip is typically `10 * _Point`.
+- **Stops level / freeze**: Validate SL/TP against `SYMBOL_TRADE_STOPS_LEVEL`, `SYMBOL_TRADE_FREEZE_LEVEL`, and tick size before send.
+- **Reverse loop when deleting/closing by index**: Closing/deleting shifts indexes — iterate high → low.
+- **Market execution / ECN**: Some symbols reject SL/TP on the opening market request — open first, then `PositionModify` / `OrderModify` (broker/symbol dependent).
+- **Filling policy**: Choose `type_filling` from symbol flags + execution mode. Prefer `CTrade::SetTypeFillingBySymbol()`. Pending orders should use `ORDER_FILLING_RETURN`. See [symbol filling](https://www.mql5.com/en/docs/constants/environment_state/marketinfoconstants).
+- **WebRequest**: Synchronous. **Only EAs and scripts** (not indicators — error `4014`). URL must be allow-listed. **Cannot run in Strategy Tester**. Docs: [WebRequest](https://www.mql5.com/en/docs/network/webrequest).
+- **Array series**: `ArraySetAsSeries(true)` → index `0` is newest bar; keep buffer series mode consistent with `CopyBuffer` usage.
+- **Trade results**: After `OrderSend` / `CTrade`, trust `MqlTradeResult.retcode` / `ResultRetcode()`, not a random `GetLastError()` pairing.
 
 ### Project Structure
 
 ```
 MQL5/
-├── Experts/
-│   └── MyEA/
-│       └── MyEA.mq5
-├── Indicators/
-│   └── MyIndicator.mq5
-├── Scripts/
-│   └── MyScript.mq5
+├── Experts/MyEA/MyEA.mq5
+├── Indicators/MyIndicator.mq5
+├── Scripts/MyScript.mq5
+├── Services/MyService.mq5
 ├── Include/
-│   ├── Core/
-│   │   ├── CTradeManager.mqh
-│   │   ├── CRiskManager.mqh
-│   │   └── CSignalBase.mqh
-│   ├── Communication/
-│   │   ├── CHttpClient.mqh
-│   │   └── CJsonHelper.mqh
+│   ├── Trade/          # or your own trade wrappers
 │   ├── UI/
-│   │   └── CPanel.mqh
 │   └── Utils/
-│       ├── CTimeFilter.mqh
-│       └── CSymbolHelper.mqh
-└── Libraries/
+└── Libraries/          # compiled .ex5 libraries (optional)
 ```
 
 ### Code Style
 
-- Prefix member variables with `m_` (e.g., `m_magicNumber`)
-- Prefix global variables with `g_` (e.g., `g_isInitialized`)
-- Always use `input` for user parameters (not `extern`)
-- Normalize prices: prefer tick-size rounding, then `NormalizeDouble(price, _Digits)` (or `SYMBOL_DIGITS`)
-- Always check return values of trade operations
+- Members `m_`, globals `g_`
+- User inputs: `input` (not MQL4 `extern` for parameters)
+- Prices: round to `SYMBOL_TRADE_TICK_SIZE`, then `NormalizeDouble(..., digits)`
+- Always check trade `retcode` (`TRADE_RETCODE_DONE` / `DONE_PARTIAL` / `PLACED`, etc.)
 
 ---
 
@@ -438,39 +461,48 @@ for(int i = 0; i < PositionsTotal(); i++) {
 }
 ```
 
-### Trade Object Init
+### Trade Object Init (Standard Library)
+
+Docs: [CTrade](https://www.mql5.com/en/docs/standardlibrary/tradeclasses/ctrade), especially [`SetTypeFillingBySymbol`](https://www.mql5.com/en/docs/standardlibrary/tradeclasses/ctrade/ctradesettypefillingbysymbol).
 
 ```cpp
+#include <Trade/Trade.mqh>
 CTrade g_trade;
-
-ENUM_ORDER_TYPE_FILLING TM_DetectFilling() {
-    uint mode = (uint)SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
-    if((mode & SYMBOL_FILLING_IOC) != 0) return ORDER_FILLING_IOC;
-    if((mode & SYMBOL_FILLING_FOK) != 0) return ORDER_FILLING_FOK;
-    return ORDER_FILLING_RETURN; // only if supported / exchange-style
-}
 
 void TM_OrdersInit() {
     g_trade.SetExpertMagicNumber(TP_MAGIC);
     g_trade.SetDeviationInPoints(30);
-    g_trade.SetTypeFilling(TM_DetectFilling()); // never hardcode FOK/IOC/RETURN
+    // Official helper: picks allowed filling from SYMBOL_FILLING_MODE
+    // (if both FOK+IOC allowed, CTrade selects FOK)
+    if(!g_trade.SetTypeFillingBySymbol(_Symbol))
+        Print("SetTypeFillingBySymbol failed for ", _Symbol);
 }
 ```
 
-### Pending Order Broker Compatibility
+Manual rules (when not using `CTrade`):
 
-Some brokers reject SL/TP on pending orders. Prefer checking `MqlTradeResult.retcode` from `CTrade` (not a guessed `GetLastError()` pair). Common cases include invalid stops (`TRADE_RETCODE_INVALID_STOPS` = 10016); always log `res.retcode` / `res.comment` and only then retry without SL/TP if your broker docs confirm that policy:
+- Read `SYMBOL_FILLING_MODE` flags (`FOK=1`, `IOC=2`, `BOC=4`).
+- Also respect `SYMBOL_TRADE_EXEMODE`: under **Market execution**, `ORDER_FILLING_RETURN` is **disabled**.
+- For **pending** orders, docs say use **`ORDER_FILLING_RETURN`** regardless of execution mode (pending is not filled at send time).
+- Invalid filling → `TRADE_RETCODE_INVALID_FILL` (**10030**).
+
+### Pending Order / Stops Compatibility
+
+Check `MqlTradeResult.retcode` ([trade return codes](https://www.mql5.com/en/docs/constants/errorswarnings/enum_trade_return_codes)):
 
 ```cpp
-MqlTradeRequest req; MqlTradeResult res;
-ZeroMemory(req); ZeroMemory(res);
-// ... fill req ...
-if(!OrderSend(req, res)) {
-    PrintFormat("OrderSend failed retcode=%u comment=%s", res.retcode, res.comment);
-    if((req.sl != 0.0 || req.tp != 0.0) && res.retcode == TRADE_RETCODE_INVALID_STOPS) {
-        req.sl = 0; req.tp = 0;
-        if(OrderSend(req, res))
-            Print("Retried pending without SL/TP; set stops after fill if needed");
+#include <Trade/Trade.mqh>
+CTrade trade;
+// ... Place order via trade.BuyStop / OrderOpen / OrderSend ...
+uint rc = trade.ResultRetcode();
+if(rc != TRADE_RETCODE_DONE && rc != TRADE_RETCODE_PLACED && rc != TRADE_RETCODE_DONE_PARTIAL) {
+    PrintFormat("Trade failed retcode=%u %s | %s",
+                rc, trade.ResultRetcodeDescription(), trade.ResultComment());
+    if(rc == TRADE_RETCODE_INVALID_STOPS) {
+        // Broker rejected SL/TP on this request — retry without stops, then modify after fill
+    }
+    if(rc == TRADE_RETCODE_INVALID_FILL) {
+        // Fix type_filling via SetTypeFillingBySymbol / SYMBOL_FILLING_MODE
     }
 }
 ```
@@ -641,8 +673,10 @@ if(breachLoss || breachTarget) {
 |---------|-----|
 | `plot()` inside local scope | MQL5 is not Pine. Use `ObjectCreate` for chart objects |
 | `ObjectSetString` on active edit | Guard with `activeEditField` check |
-| Hardcoded `ORDER_FILLING_*` | Detect via `SYMBOL_FILLING_MODE` |
+| Hardcoded `ORDER_FILLING_*` | Prefer `CTrade::SetTypeFillingBySymbol`; pending → `ORDER_FILLING_RETURN` |
 | BUY TP checked with Ask | Use Bid for BUY exit/TP distance |
+| `WebRequest` in indicator | Forbidden (4014); EA/script only + URL allow-list |
+| Ignoring `retcode` | Use `TRADE_RETCODE_*` / `ResultRetcode()` |
 | Same prefix for panel + chart lines | Use separate prefixes so bulk delete is safe |
 | Rebuilding panel during drag | Shift all objects by delta instead |
 | Not iterating in reverse when deleting | Deleted positions shift indices below |
@@ -691,30 +725,39 @@ Check `.ex5` file was created with recent timestamp. Check per-file log for "0 e
 
 ### Scope
 
-Use only official MQL5 documentation:
-- https://www.mql5.com/en/docs
-- https://www.mql5.com/zh/docs (Chinese)
-- https://www.mql5.com/ja/docs (Japanese)
+**Primary**: [https://www.mql5.com/en/docs](https://www.mql5.com/en/docs)  
+Also: [zh/docs](https://www.mql5.com/zh/docs), [ja/docs](https://www.mql5.com/ja/docs)
 
-Do not use forums, blogs, or third-party sites.
+Do **not** invent APIs from forums/blogs when the Reference already defines the function.
+
+### High-value official anchors
+
+| Topic | Doc |
+|-------|-----|
+| Language overview / app types | https://www.mql5.com/en/docs |
+| Event handlers | https://www.mql5.com/en/docs/event_handlers |
+| `OnCalculate` | https://www.mql5.com/en/docs/event_handlers/oncalculate |
+| Trade request struct | https://www.mql5.com/en/docs/constants/structures/mqltraderequest |
+| Trade result / `OrderSend` | https://www.mql5.com/en/docs/trading/ordersend |
+| Trade server retcodes | https://www.mql5.com/en/docs/constants/errorswarnings/enum_trade_return_codes |
+| Symbol filling / execution | https://www.mql5.com/en/docs/constants/environment_state/marketinfoconstants |
+| `CTrade` | https://www.mql5.com/en/docs/standardlibrary/tradeclasses/ctrade |
+| `WebRequest` | https://www.mql5.com/en/docs/network/webrequest |
+| Chart events | https://www.mql5.com/en/docs/constants/chartconstants/enum_chartevents |
+| Runtime errors | https://www.mql5.com/en/docs/constants/errorswarnings/errorcodes |
 
 ### Workflow
 
-1. Normalize error or question into keywords (error code, function/class names, 2-5 keywords)
-2. Search official docs via site search
-3. Open most relevant pages to confirm function signatures, parameter types, return values
-4. Produce response with:
-   - Summary of the cause
-   - Doc links (prefer EN; use ZH/JA if needed)
-   - Specific guidance from docs
-   - Next checks if ambiguity remains
+1. Map the question to a symbol: function name, enum, retcode (`10016`, `10030`…), or handler (`OnTradeTransaction`).
+2. Open the matching Reference page (table above first).
+3. Confirm signature, required `MqlTradeRequest` fields, and allowed enums.
+4. Answer with: cause → doc link → concrete fix → what to log (`retcode`, `comment`, symbol properties).
 
 ### Guardrails
 
-- If error cannot be mapped to docs, state that clearly and propose best-effort hypothesis
-- Never invent API signatures or behavior not documented
-- Keep response concise and actionable
-
+- Never invent undocumented overloads or retcodes.
+- If docs are ambiguous for a broker quirk, say so and suggest logging `SYMBOL_TRADE_EXEMODE`, `SYMBOL_FILLING_MODE`, `SYMBOL_TRADE_MODE`.
+- Keep answers short and actionable.
 ---
 
 ## Quick Reference
@@ -743,30 +786,44 @@ bool ValidateSLTP(ENUM_TRADE_DIR dir, double entry, double sl, double tp) {
     return !(sl > 0 && sl <= entry) && !(tp > 0 && tp >= entry);
 }
 
-// Trade init (detect filling; do not hardcode)
+// Trade init — official filling helper
+#include <Trade/Trade.mqh>
 CTrade trade;
 trade.SetExpertMagicNumber(MAGIC);
 trade.SetDeviationInPoints(30);
-uint fm = (uint)SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
-if((fm & SYMBOL_FILLING_IOC) != 0) trade.SetTypeFilling(ORDER_FILLING_IOC);
-else if((fm & SYMBOL_FILLING_FOK) != 0) trade.SetTypeFilling(ORDER_FILLING_FOK);
-else trade.SetTypeFilling(ORDER_FILLING_RETURN);
+trade.SetTypeFillingBySymbol(_Symbol);
+// Pending orders: use ORDER_FILLING_RETURN (per docs)
 
 // Safe edit field update
 if(m_state.activeEditField == name) return;
 ObjectSetString(0, name, OBJPROP_TEXT, text);
 
-// Config save/load
+// Config save/load (terminal Files folder)
 int h = FileOpen("cfg.dat", FILE_WRITE | FILE_BIN);
 FileWriteStruct(h, cfg); FileClose(h);
-// Load:
-FileReadStruct(h, cfg);
 
 // Object reverse delete
 for(int i = ObjectsTotal(0)-1; i >= 0; i--)
     if(StringFind(ObjectName(0, i), prefix) == 0)
         ObjectDelete(0, ObjectName(0, i));
 ```
+
+### Common trade retcodes
+
+| Code | Constant | Meaning |
+|------|----------|---------|
+| 10008 | `TRADE_RETCODE_PLACED` | Order placed |
+| 10009 | `TRADE_RETCODE_DONE` | Done |
+| 10010 | `TRADE_RETCODE_DONE_PARTIAL` | Partial fill |
+| 10014 | `TRADE_RETCODE_INVALID_VOLUME` | Bad volume |
+| 10015 | `TRADE_RETCODE_INVALID_PRICE` | Bad price |
+| 10016 | `TRADE_RETCODE_INVALID_STOPS` | Bad SL/TP |
+| 10019 | `TRADE_RETCODE_NO_MONEY` | Free margin |
+| 10030 | `TRADE_RETCODE_INVALID_FILL` | Bad `type_filling` |
+| 10031 | `TRADE_RETCODE_CONNECTION` | No server connection |
+| 10034 | `TRADE_RETCODE_LIMIT_VOLUME` | Volume limit |
+
+Full list: [Trade Server Return Codes](https://www.mql5.com/en/docs/constants/errorswarnings/enum_trade_return_codes)
 
 ### Type Conversion Quick Ref
 
@@ -781,3 +838,5 @@ for(int i = ObjectsTotal(0)-1; i >= 0; i--)
 | Get tick size | `SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE)` |
 | Get contract size | `SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE)` |
 | Get tick value | `SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE)` |
+| Filling flags | `SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE)` |
+| Execution mode | `SymbolInfoInteger(_Symbol, SYMBOL_TRADE_EXEMODE)` |
