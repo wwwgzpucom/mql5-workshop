@@ -446,6 +446,27 @@ Docs: [Timeseries](https://www.mql5.com/en/docs/series)
 - Release unused indicator handles: `IndicatorRelease`.
 - Built-in indicators via `iMA`/`iATR`/… return handles → `CopyBuffer`.
 
+| API | Role |
+|-----|------|
+| `CopyRates` / `CopySeries` | Bar structs / synced fields |
+| `CopyOpen/High/Low/Close/Time/…` | Single-field series |
+| `CopyBuffer` | Indicator buffer by handle+index |
+| `CopyTicks` / `CopyTicksRange` | Tick stream |
+| `Bars` / `BarsCalculated` | History depth / indicator ready count |
+| `iBarShift` / `iHighest` / `iLowest` | Classic shift helpers |
+| `IndicatorCreate` / `Parameters` / `Release` | Generic handle lifecycle |
+
+### iCustom path rules
+
+Docs: [iCustom](https://www.mql5.com/en/docs/indicators/icustom)
+
+- `"\\Name"` → search `MQL5\Name.ex5` from root.
+- Else: (1) same folder as caller EX5, then (2) `MQL5\Indicators\…`.
+- Subdirs: use `"MyFolder\\IndName"` (double backslash).
+- Applied price / chained handle = **last** argument after custom `input`s.
+- Non-constant name / `IndicatorCreate` → add `#property tester_indicator "file.ex5"` for tester.
+- Failure → `INVALID_HANDLE`, error **4802**.
+
 ---
 
 ## 7. Custom Indicators
@@ -620,10 +641,13 @@ Also: `FileLoad`/`FileSave`, `FolderCreate`/`Delete`/`Clean`, find APIs.
 
 Docs: [WebRequest](https://www.mql5.com/en/docs/network/webrequest)
 
-- **EA + Script only** — calling from indicator → error **4014**.
-- URL must be allow-listed in Tools → Options → Expert Advisors.
-- Synchronous (blocks). Not available in Strategy Tester.
-- Also: sockets / TCP + TLS APIs under Network section.
+Two overloads: form-urlencoded (cookie/referer) · custom headers (`"Key: Value\r\n"`).
+
+- Returns HTTP code, or **-1** on error (`GetLastError`).
+- **EA + Script only** — indicator → **4014** (shared symbol thread; must not block).
+- URL allow-list: Tools → Options → Expert Advisors (port from `http`/`https`).
+- Synchronous (blocks). **Not** available in Strategy Tester.
+- Also: sockets / TCP + TLS under Network section.
 
 ---
 
