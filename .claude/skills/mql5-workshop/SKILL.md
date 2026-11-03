@@ -917,13 +917,36 @@ Docs: [OOP](https://www.mql5.com/en/docs/basis/oop) — encapsulation, inheritan
 
 ## 13. Testing & Optimization
 
-Docs: [OnTester](https://www.mql5.com/en/docs/event_handlers/ontester) · Testing section of Reference
+Docs: [OnTester](https://www.mql5.com/en/docs/event_handlers/ontester) · [OnTesterPass](https://www.mql5.com/en/docs/event_handlers/ontesterpass)
 
 - Strategy Tester: no `WebRequest`; trade/network limitations apply.
 - `double OnTester()` → custom optimization criterion (**higher = better**; genetic sort descending).
-- Also: `OnTesterInit` / `OnTesterDeinit` / `OnTesterPass` for frames / multi-pass data.
 - Thin sample history (< ~10 trades) → often return `0` so genetics discard junk.
-- Single-test vs optimize: check `MQLInfoInteger(MQL_TESTER)` and `MQL_OPTIMIZATION`.
+- Single-test vs optimize: `MQLInfoInteger(MQL_TESTER)` / `MQL_OPTIMIZATION`.
+
+**Frames pipeline:**
+
+| Handler | Role |
+|---------|------|
+| `OnTester` | Compute criterion; `FrameAdd()` send payload to terminal |
+| `OnTesterPass` | Receive frames during optimization (may arrive late/bundled) |
+| `OnTesterInit` / `OnTesterDeinit` | Setup; drain remaining frames with `FrameNext` in Deinit |
+| Replay | `FrameFirst` / `FrameFilter` / `FrameNext` after optimization |
+
+EA with `OnTesterPass`/`OnTesterDeinit` auto-loads on a separate chart for the optimize session.
+
+### Expert strategy modules
+
+Docs: [Expert Classes](https://www.mql5.com/en/docs/standardlibrary/expertclasses) · `Include\Expert\`
+
+| Layer | Base | Examples |
+|-------|------|----------|
+| EA shell | `CExpert` / `CExpertBase` | Wizard-style composition |
+| Signal | `CExpertSignal` | `CSignalMA`, `MACD`, `RSI`, `Stoch`, … |
+| Trailing | `CExpertTrailing` | FixedPips, MA, PSAR, None |
+| Money | `CExpertMoney` | FixedLot, FixedRisk, SizeOptimized, … |
+
+Useful when building modular Wizard EAs; custom panels usually use `CTrade` directly instead.
 
 ---
 
